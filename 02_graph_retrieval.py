@@ -105,8 +105,10 @@ class CypherTemplates:
 
             # Query 7: Visa requirement check
             'visa_check': (
-                "MATCH (from:Country {name:$from_country})-[v:NEEDS_VISA]->(to:Country {name:$to_country}) "
-                "RETURN v.visa_type, from.name, to.name"
+                "MATCH (from:Country {name:$from_country}), (to:Country {name:$to_country}) "
+                "OPTIONAL MATCH (from)-[v:NEEDS_VISA]->(to) "
+                "RETURN v.visa_type, from.name as from_name, to.name as to_name, "
+                "CASE WHEN v IS NULL THEN 'No visa required' ELSE 'Visa required' END as visa_status"
             ),
 
             # Query 8: Hotels available for a specific date range (if travellers have stayed)
@@ -186,9 +188,9 @@ class BaselineRetriever:
             with self.driver.session() as session:
                 session.run("RETURN 1")
             self.connected = True
-            print(f"✓ Connected to Neo4j: {uri}")
+            print(f"[OK] Connected to Neo4j: {uri}")
         except Exception as e:
-            print(f"✗ Failed to connect to Neo4j: {e}")
+            print(f"[FAIL] Failed to connect to Neo4j: {e}")
             self.connected = False
 
     def execute(self, template: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -328,10 +330,15 @@ class LocalBaselineRetriever:
                 for col, th in [('cleanliness_base', min_clean), ('comfort_base', min_comfort), ('facilities_base', min_facilities)]:
                     if col in df.columns:
                         df = df[df[col].astype(float) >= th]
-                results = df[['hotel_id', 'hotel_name', 'star_rating', 'cleanliness_base', 'comfort_base']].head(50).to_dict(orient='records')
+                # Select only columns that exist
+                result_cols = ['hotel_id', 'hotel_name']
+                for col in ['star_rating', 'cleanliness_base', 'comfort_base']:
+                    if col in df.columns:
+                        result_cols.append(col)
+                results = df[result_cols].head(50).to_dict(orient='records')
                 return {'status': 'success', 'results': results, 'count': len(results)}
 
-            if 'match (h:hotel {name:$hotel_name})' in t or 'match (h:hotel {name:$hotel_name})' in template:
+            if 'hotel {name:$hotel_name}' in t or 'hotel_name' in t:
                 # hotel_details exact name
                 name = params.get('hotel_name')
                 if name:
@@ -416,7 +423,7 @@ class EmbeddingRetriever:
                 self.embeddings = data['arr_0']
                 with open(meta_path, 'r', encoding='utf-8') as f:
                     self.hotel_meta = json.load(f)
-                print(f"✓ Loaded {len(self.hotel_meta)} hotel embeddings from cache")
+                print(f"[OK] Loaded {len(self.hotel_meta)} hotel embeddings from cache")
                 return True
             except Exception as e:
                 print(f"Warning: failed to load cache: {e}")
@@ -463,7 +470,7 @@ class EmbeddingRetriever:
         with open(meta_path, 'w', encoding='utf-8') as f:
             json.dump(self.hotel_meta, f, ensure_ascii=False, indent=2)
         self.embeddings = emb_array
-        print(f"✓ Built and cached {len(self.hotel_meta)} hotel embeddings")
+        print(f"[OK] Built and cached {len(self.hotel_meta)} hotel embeddings")
 
     def _cosine_sim(self, q: Any, matrix: Any) -> List[float]:
         # q: 1D vector, matrix: 2D array (n x d)
@@ -548,8 +555,8 @@ class HybridRetriever:
             'merged_results': [],
         }
 
-        # Build parameters from entities (handles multiple rating filters)
-        params = build_cypher_params(entities)
+        # Build parameters from entities (handles multiple rating filters and countries)
+        params = build_cypher_params(entities, intent=intent)
 
         # Choose template: if rating_types present prefer 'hotel_filter' or 'comfortable_hotels'
         chosen_intent = intent
@@ -564,19 +571,54 @@ class HybridRetriever:
         if method in ['baseline', 'hybrid']:
             if self.baseline:
                 template = CypherTemplates.get_template(chosen_intent)
-                baseline_result = self.baseline.execute(template, params)
-                results['baseline_results'] = baseline_result.get('results', [])
-                results['baseline_status'] = baseline_result.get('status')
+                # For visa_check, ensure both countries are present
+                if chosen_intent == 'visa_check':
+                    if not params.get('from_country') or not params.get('to_country'):
+                        results['baseline_status'] = 'error'
+                        results['baseline_results'] = []
+                        results['baseline_error'] = 'Both source and destination countries are required for visa queries'
+                    else:
+                        baseline_result = self.baseline.execute(template, params)
+                        results['baseline_results'] = baseline_result.get('results', [])
+                        results['baseline_status'] = baseline_result.get('status')
+                        if baseline_result.get('error'):
+                            results['baseline_error'] = baseline_result.get('error')
+                else:
+                    baseline_result = self.baseline.execute(template, params)
+                    results['baseline_results'] = baseline_result.get('results', [])
+                    results['baseline_status'] = baseline_result.get('status')
 
-        # Run embedding if requested
-        if method in ['embeddings', 'hybrid']:
+        # Run embedding if requested (skip for visa_check - embedding retriever is hotel-specific)
+        if method in ['embeddings', 'hybrid'] and intent != 'visa_check':
             if self.embedding:
                 embedding_result = self.embedding.retrieve(query_embedding, top_k=10)
                 results['embedding_results'] = embedding_result.get('results', [])
                 results['embedding_status'] = embedding_result.get('status')
+        elif intent == 'visa_check':
+            # Skip embedding retrieval for visa queries
+            results['embedding_results'] = []
+            results['embedding_status'] = 'skipped'
 
-        # Merge results if hybrid
-        if method == 'hybrid':
+        # Filter embedding results by city if city is specified
+        city_val = entities.get('city')
+        target_city = None
+        if city_val:
+            if isinstance(city_val, list):
+                target_city = city_val[0].lower() if city_val else None
+            else:
+                target_city = city_val.lower() if city_val else None
+        
+        if target_city and results['embedding_results']:
+            # Filter embedding results to only include hotels in the specified city
+            filtered_embedding = []
+            for item in results['embedding_results']:
+                item_city = item.get('city', '').lower() if item.get('city') else ''
+                if target_city in item_city or item_city in target_city:
+                    filtered_embedding.append(item)
+            results['embedding_results'] = filtered_embedding
+
+        # Merge results if hybrid (skip merging for visa_check - different result types)
+        if method == 'hybrid' and intent != 'visa_check':
             # Simple merge: combine and deduplicate by hotel_id
             seen_hotels = set()
             merged = []
@@ -586,6 +628,9 @@ class HybridRetriever:
                     merged.append(item)
                     seen_hotels.add(hotel_id)
             results['merged_results'] = merged
+        elif method == 'hybrid' and intent == 'visa_check':
+            # For visa queries, merged_results should just be baseline_results (no hotels)
+            results['merged_results'] = results['baseline_results']
 
         return results
 
@@ -631,16 +676,19 @@ def load_neo4j_config(config_path: str = 'config.txt') -> Dict[str, str]:
 # HELPERS: Build Cypher parameters from extracted entities
 # =====================================================================
 
-def build_cypher_params(entities: Dict[str, Optional[Any]]) -> Dict[str, Any]:
+def build_cypher_params(entities: Dict[str, Optional[Any]], intent: Optional[str] = None) -> Dict[str, Any]:
     """Build a parameter dict for Cypher templates from extracted entities.
 
     Supports mapping multiple rating types (e.g., cleanliness, comfort)
     into the expected template parameter names.
+    Also handles multiple countries for visa queries.
 
     Args:
         entities: Extracted entities from preprocessing (may include keys:
                   'city', 'country', 'hotel', 'traveller_type', 'min_rating',
                   'rating_types' (list), 'date')
+                  Note: 'city' and 'country' can be lists or single values
+        intent: User intent (e.g., 'visa_check') to determine special parameter mapping
 
     Returns:
         Dict of parameters to pass to BaselineRetriever.execute()
@@ -650,11 +698,38 @@ def build_cypher_params(entities: Dict[str, Optional[Any]]) -> Dict[str, Any]:
     if not entities:
         return params
 
-    # Basic pass-throughs
-    if entities.get('city'):
-        params['city'] = entities['city']
-    if entities.get('country'):
-        params['country'] = entities['country']
+    # Handle city - if list, use first one (or all if template supports it)
+    city_val = entities.get('city')
+    if city_val:
+        if isinstance(city_val, list):
+            params['city'] = city_val[0]  # Use first city for now
+        else:
+            params['city'] = city_val
+
+    # Handle country - special handling for visa_check intent
+    country_val = entities.get('country')
+    if country_val:
+        if intent == 'visa_check':
+            # For visa queries, map multiple countries to from_country and to_country
+            if isinstance(country_val, list) and len(country_val) >= 2:
+                # Use first as from, second as to (order preserved from extraction)
+                params['from_country'] = country_val[0]
+                params['to_country'] = country_val[1]
+            elif isinstance(country_val, list) and len(country_val) == 1:
+                # Only one country found - can't determine visa requirement
+                # Don't set parameters - query will fail gracefully
+                pass
+            else:
+                # Single country value - can't determine visa requirement
+                # Don't set parameters - query will fail gracefully
+                pass
+        else:
+            # For other intents, use first country if list
+            if isinstance(country_val, list):
+                params['country'] = country_val[0]
+            else:
+                params['country'] = country_val
+
     if entities.get('hotel'):
         # templates expect $hotel_name
         params['hotel_name'] = entities['hotel']

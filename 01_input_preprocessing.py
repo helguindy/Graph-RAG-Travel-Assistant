@@ -232,7 +232,46 @@ class HotelEntityExtractor:
 
         return None
 
-    def extract(self, user_input: str) -> Dict[str, Optional[str]]:
+    def _fuzzy_match_all(self, text: str, candidates: Set[str], cutoff: float = 0.75) -> List[str]:
+        """
+        Extract ALL matching entities from text (not just the first one).
+
+        Args:
+            text: Input text to search in
+            candidates: Set of candidate entities
+            cutoff: Fuzzy match confidence threshold (0-1)
+
+        Returns:
+            List of all matching entities (may be empty)
+        """
+        if not candidates:
+            return []
+
+        text_lower = text.lower()
+        matches = []
+        seen = set()
+
+        # Exact substring matches first
+        for candidate in candidates:
+            candidate_lower = candidate.lower()
+            if candidate_lower in text_lower and candidate not in seen:
+                matches.append(candidate)
+                seen.add(candidate)
+
+        # Fuzzy match on tokens for remaining candidates
+        words = re.findall(r'[A-Za-z0-9\-\']+', text)
+        for word in words:
+            if len(word) < 3:  # Skip very short words
+                continue
+            word_matches = get_close_matches(word, list(candidates), n=5, cutoff=cutoff)
+            for match in word_matches:
+                if match not in seen:
+                    matches.append(match)
+                    seen.add(match)
+
+        return matches
+
+    def extract(self, user_input: str) -> Dict[str, Optional[any]]:
         """
         Extract entities from user input restricted to the Step 1 requirements.
 
@@ -240,13 +279,15 @@ class HotelEntityExtractor:
             user_input: Raw user query
 
         Returns:
-            Dict with extracted entities (only):
-              - hotel: hotel name (or None)
-              - city: city name (or None)
-              - country: country name (or None)
+            Dict with extracted entities:
+              - hotel: hotel name (or None) - single value for now
+              - city: city name or list of cities (or None)
+              - country: country name or list of countries (or None)
               - traveller_type: business, family, couple, solo, etc. (or None)
               - age_group: detected age group (e.g., '25-34') or None
               - gender: detected gender mention (male/female/other) or None
+            
+            Note: city and country can be lists to support multiple values.
         """
         entities = {
             'hotel': None,
@@ -257,10 +298,58 @@ class HotelEntityExtractor:
             'gender': None,
         }
 
-        # Match hotel, city, country using fuzzy lookup
+        # Match hotel (single value for now)
         entities['hotel'] = self._fuzzy_match(user_input, self.lookups['hotels'])
-        entities['city'] = self._fuzzy_match(user_input, self.lookups['cities'])
-        entities['country'] = self._fuzzy_match(user_input, self.lookups['countries'])
+        
+        # Match cities - extract ALL matches
+        cities = self._fuzzy_match_all(user_input, self.lookups['cities'])
+        if cities:
+            entities['city'] = cities[0] if len(cities) == 1 else cities
+        
+        # Match countries - extract ALL matches (important for visa queries)
+        # Special handling for visa queries: look for "from X to Y" patterns
+        text_lower = user_input.lower()
+        countries = []
+        
+        # Check for visa-related patterns: "from [country] to [country]"
+        # More flexible patterns that handle various phrasings
+        visa_patterns = [
+            r'from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
+            r'go\s+from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
+            r'travel\s+from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
+            r'([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s+visa|\s+country|$|,|\?|\.)',  # "egypt to brazil visa"
+        ]
+        
+        visa_from_to = None  # Store as tuple to preserve order
+        for pattern in visa_patterns:
+            matches = re.findall(pattern, text_lower, re.IGNORECASE)
+            if matches:
+                for match in matches:
+                    if isinstance(match, tuple) and len(match) >= 2:
+                        from_country_raw = match[0].strip()
+                        to_country_raw = match[1].strip()
+                        # Remove common words that might interfere
+                        from_country_raw = re.sub(r'\b(and|or|the|a|an|do|i|need)\b', '', from_country_raw, flags=re.IGNORECASE).strip()
+                        to_country_raw = re.sub(r'\b(and|or|the|a|an|visa|requirement)\b', '', to_country_raw, flags=re.IGNORECASE).strip()
+                        # Try to match these to known countries
+                        from_match = self._fuzzy_match(from_country_raw, self.lookups['countries'], cutoff=0.6)
+                        to_match = self._fuzzy_match(to_country_raw, self.lookups['countries'], cutoff=0.6)
+                        if from_match and to_match:
+                            # Only set if we have both countries
+                            visa_from_to = (from_match, to_match)
+                            break
+                if visa_from_to:
+                    break
+        
+        if visa_from_to:
+            # Store as list preserving order: [from_country, to_country]
+            countries = [visa_from_to[0], visa_from_to[1]]
+        else:
+            # Fall back to general country extraction
+            countries = self._fuzzy_match_all(user_input, self.lookups['countries'])
+        
+        if countries:
+            entities['country'] = countries[0] if len(countries) == 1 else countries
 
         # Traveller type: lookup + common patterns
         entities['traveller_type'] = self._fuzzy_match(user_input, self.lookups['traveller_types'], cutoff=0.6)
