@@ -1,0 +1,6 @@
+neo4j
+pandas
+sentence-transformers
+transformers
+spacy
+streamlit
