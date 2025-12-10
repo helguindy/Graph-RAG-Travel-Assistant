@@ -54,22 +54,26 @@ class CypherTemplates:
             Parameterized Cypher query template
         """
         templates = {
-            # Query 1: Basic hotel search by city and minimum rating
+            # Query 1: Basic hotel search by city and minimum rating (return quality metrics)
             'hotel_search': (
                 "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City {name:$city}) "
+                "MATCH (c)-[:LOCATED_IN]->(co:Country) "
                 "WHERE h.average_reviews_score >= $min_rating "
-                "RETURN h.hotel_id, h.name, h.star_rating, h.average_reviews_score "
+                "RETURN h.hotel_id, h.name, h.star_rating, h.average_reviews_score, h.cleanliness_base, h.comfort_base, h.facilities_base, h.location_base, h.staff_base, h.value_for_money_base, c.name as city, co.name as country "
+                "ORDER BY h.cleanliness_base DESC, h.average_reviews_score DESC "
                 "LIMIT 50"
             ),
 
             # Query 2: Filter hotels by city and numeric attributes (star rating, cleanliness, etc.)
             'hotel_filter': (
                 "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City {name:$city}) "
+                "MATCH (c)-[:LOCATED_IN]->(co:Country) "
                 "WHERE h.star_rating >= $min_star "
                 "AND h.cleanliness_base >= $min_clean "
                 "AND h.comfort_base >= $min_comfort "
                 "AND h.facilities_base >= $min_facilities "
-                "RETURN h.hotel_id, h.name, h.star_rating, h.cleanliness_base, h.comfort_base "
+                "RETURN h.hotel_id, h.name, h.star_rating, h.cleanliness_base, h.comfort_base, h.facilities_base, h.location_base, h.staff_base, h.value_for_money_base, h.average_reviews_score, c.name as city, co.name as country "
+                "ORDER BY h.cleanliness_base DESC, h.average_reviews_score DESC "
                 "LIMIT 50"
             ),
 
@@ -79,10 +83,11 @@ class CypherTemplates:
                 "RETURN h"
             ),
 
-            # Query 4: Find hotels by country
+            # Query 4: Find hotels by country (with quality signals)
             'hotels_by_country': (
                 "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
-                "RETURN h.hotel_id, h.name, h.star_rating, c.name as city "
+                "RETURN h.hotel_id, h.name, h.star_rating, h.cleanliness_base, h.comfort_base, h.facilities_base, h.location_base, h.staff_base, h.value_for_money_base, h.average_reviews_score, c.name as city, co.name as country "
+                "ORDER BY h.cleanliness_base DESC, h.average_reviews_score DESC "
                 "LIMIT 50"
             ),
 
@@ -103,12 +108,24 @@ class CypherTemplates:
                 "LIMIT 10"
             ),
 
-            # Query 7: Visa requirement check
+            # Query 7: Visa requirement check (between two specific countries)
             'visa_check': (
                 "MATCH (from:Country {name:$from_country}), (to:Country {name:$to_country}) "
                 "OPTIONAL MATCH (from)-[v:NEEDS_VISA]->(to) "
                 "RETURN v.visa_type, from.name as from_name, to.name as to_name, "
                 "CASE WHEN v IS NULL THEN 'No visa required' ELSE 'Visa required' END as visa_status"
+            ),
+            
+            # Query 13: Find all visa-free destinations from a country
+            'visa_free_destinations': (
+                "MATCH (from:Country {name:$from_country}) "
+                "MATCH (to:Country) "
+                "WHERE from <> to "
+                "OPTIONAL MATCH (from)-[v:NEEDS_VISA]->(to) "
+                "WHERE v IS NULL "
+                "RETURN to.name as country_name, 'No visa required' as visa_status "
+                "ORDER BY to.name "
+                "LIMIT 200"
             ),
 
             # Query 8: Hotels available for a specific date range (if travellers have stayed)
@@ -312,7 +329,8 @@ class LocalBaselineRetriever:
                 if city:
                     df = df[df['city'].str.lower() == str(city).lower()]
                 df = df[df['average_reviews_score'].astype(float) >= min_rating]
-                df = df[['hotel_id', 'hotel_name', 'star_rating', 'average_reviews_score']].head(50)
+                cols = [c for c in ['hotel_id','hotel_name','star_rating','average_reviews_score','cleanliness_base','comfort_base','facilities_base','location_base','staff_base','value_for_money_base','city','country'] if c in df.columns]
+                df = df[cols].head(50)
                 results = df.to_dict(orient='records')
                 return {'status': 'success', 'results': results, 'count': len(results)}
 
@@ -330,12 +348,8 @@ class LocalBaselineRetriever:
                 for col, th in [('cleanliness_base', min_clean), ('comfort_base', min_comfort), ('facilities_base', min_facilities)]:
                     if col in df.columns:
                         df = df[df[col].astype(float) >= th]
-                # Select only columns that exist
-                result_cols = ['hotel_id', 'hotel_name']
-                for col in ['star_rating', 'cleanliness_base', 'comfort_base']:
-                    if col in df.columns:
-                        result_cols.append(col)
-                results = df[result_cols].head(50).to_dict(orient='records')
+                cols = [c for c in ['hotel_id','hotel_name','star_rating','average_reviews_score','cleanliness_base','comfort_base','facilities_base','location_base','staff_base','value_for_money_base','city','country'] if c in df.columns]
+                results = df[cols].head(50).to_dict(orient='records')
                 return {'status': 'success', 'results': results, 'count': len(results)}
 
             if 'hotel {name:$hotel_name}' in t or 'hotel_name' in t:
@@ -350,7 +364,8 @@ class LocalBaselineRetriever:
                 country = params.get('country')
                 if country:
                     df2 = df[df['country'].str.lower() == str(country).lower()]
-                    results = df2[['hotel_id', 'hotel_name', 'star_rating', 'city']].to_dict(orient='records')
+                    cols = [c for c in ['hotel_id','hotel_name','star_rating','average_reviews_score','cleanliness_base','comfort_base','facilities_base','location_base','staff_base','value_for_money_base','city','country'] if c in df2.columns]
+                    results = df2[cols].to_dict(orient='records')
                     return {'status': 'success', 'results': results, 'count': len(results)}
 
             if 'order by h.average_reviews_score desc' in t:
@@ -373,20 +388,57 @@ class LocalBaselineRetriever:
 # Semantic similarity search using vector embeddings
 
 class EmbeddingRetriever:
-    """In-memory embedding retriever using hotel descriptions from CSV.
+    """Enhanced multi-model embedding retriever supporting:
+    - Multiple embedding models (MiniLM, MPNet, BGE)
+    - Text-based embeddings (hotel descriptions)
+    - Feature-based embeddings (numerical attributes)
+    - Hybrid text+feature fusion
 
-    If a cache of hotel embeddings exists (`.cache/hotel_embeddings.npz`), it will be
-    loaded; otherwise embeddings will be computed using the provided embedder and
-    cached for future runs.
+    If a cache exists for the selected model, it will be loaded;
+    otherwise embeddings will be computed and cached.
     """
 
-    def __init__(self, embedder: Optional[Any] = None, csv_dir: str = 'csv', cache_dir: str = '.cache'):
+    # Supported embedding models
+    MODELS = {
+        'minilm': 'sentence-transformers/all-MiniLM-L6-v2',      # 384-dim, fast, default
+        'mpnet': 'sentence-transformers/all-mpnet-base-v2',      # 768-dim, high quality
+        'bge': 'BAAI/bge-small-en-v1.5',                         # 384-dim, optimized for retrieval
+    }
+
+    def __init__(
+        self,
+        embedder: Optional[Any] = None,
+        csv_dir: str = 'csv',
+        cache_dir: str = '.cache',
+        embedding_model: str = 'minilm',
+        use_features: bool = True,
+        feature_weight: float = 0.3,
+    ):
+        """
+        Initialize multi-model embedding retriever.
+
+        Args:
+            embedder: Legacy embedder object (for backward compatibility)
+            csv_dir: Directory containing CSV files
+            cache_dir: Directory for caching embeddings
+            embedding_model: Model identifier ('minilm', 'mpnet', 'bge')
+            use_features: Whether to include feature-based embeddings
+            feature_weight: Weight for feature embeddings (0-1), rest is text weight
+        """
         self.embedder = embedder
         self.csv_dir = csv_dir
         self.cache_dir = Path(cache_dir)
+        self.embedding_model = embedding_model
+        self.use_features = use_features
+        self.feature_weight = max(0.0, min(1.0, feature_weight))  # Clamp to [0, 1]
+        self.text_weight = 1.0 - self.feature_weight
+        
+        # Check if embedder is available or if we need to load model
         self.available = embedder is not None and getattr(embedder, 'available', False)
         self.hotel_meta: List[Dict[str, Any]] = []
-        self.embeddings: Optional[Any] = None
+        self.text_embeddings: Optional[Any] = None
+        self.feature_embeddings: Optional[Any] = None
+        self.model = None  # For direct model access
 
         # Ensure cache dir exists
         try:
@@ -405,7 +457,7 @@ class EmbeddingRetriever:
                 print(f"Warning: failed to build hotel embeddings: {e}")
 
     def _hotel_text(self, row: Dict[str, str]) -> str:
-        # Create a compact text representation for embedding
+        """Create a compact text representation for embedding."""
         parts = [row.get('hotel_name', ''), row.get('city', ''), row.get('country', '')]
         # include star rating and key numeric attributes if present
         for k in ['star_rating', 'cleanliness_base', 'comfort_base', 'facilities_base', 'location_base', 'staff_base', 'value_for_money_base']:
@@ -413,23 +465,69 @@ class EmbeddingRetriever:
                 parts.append(f"{k.replace('_',' ')} {row[k]}")
         return ' | '.join([p for p in parts if p])
 
+    def _extract_features(self, row: Dict[str, str]) -> List[float]:
+        """Extract numerical feature vector from hotel attributes.
+        
+        Features include:
+        - star_rating (1-5)
+        - 6 quality dimensions (cleanliness, comfort, facilities, location, staff, value)
+        - average_reviews_score (if available)
+        
+        Returns:
+            8-dimensional feature vector
+        """
+        features = []
+        
+        # Star rating (1-5)
+        features.append(float(row.get('star_rating', 0.0)))
+        
+        # Quality dimensions (0-10 scale)
+        for attr in ['cleanliness_base', 'comfort_base', 'facilities_base', 
+                     'location_base', 'staff_base', 'value_for_money_base']:
+            val = row.get(attr, 0.0)
+            features.append(float(val) if val else 0.0)
+        
+        # Average review score (if available, otherwise 0)
+        avg_score = row.get('average_reviews_score', 0.0)
+        features.append(float(avg_score) if avg_score else 0.0)
+        
+        return features
+
     def _load_cache(self) -> bool:
-        # Load .npz cache if present
-        embeddings_path = self.cache_dir / 'hotel_embeddings.npz'
+        """Load cached embeddings (text and/or features) for the selected model."""
+        # Model-specific cache files
+        text_emb_path = self.cache_dir / f'hotel_text_{self.embedding_model}.npz'
+        feature_emb_path = self.cache_dir / 'hotel_features.npz'
         meta_path = self.cache_dir / 'hotel_meta.json'
-        if embeddings_path.exists() and meta_path.exists() and np is not None:
-            try:
-                data = np.load(embeddings_path, allow_pickle=True)
-                self.embeddings = data['arr_0']
-                with open(meta_path, 'r', encoding='utf-8') as f:
-                    self.hotel_meta = json.load(f)
-                print(f"[OK] Loaded {len(self.hotel_meta)} hotel embeddings from cache")
-                return True
-            except Exception as e:
-                print(f"Warning: failed to load cache: {e}")
-        return False
+        
+        if not meta_path.exists() or np is None:
+            return False
+
+        try:
+            # Load metadata
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                self.hotel_meta = json.load(f)
+            
+            # Load text embeddings
+            if text_emb_path.exists():
+                data = np.load(text_emb_path, allow_pickle=True)
+                self.text_embeddings = data['arr_0']
+                print(f"[OK] Loaded {len(self.hotel_meta)} text embeddings ({self.embedding_model}) from cache")
+            
+            # Load feature embeddings if enabled
+            if self.use_features and feature_emb_path.exists():
+                data = np.load(feature_emb_path, allow_pickle=True)
+                self.feature_embeddings = data['arr_0']
+                print(f"[OK] Loaded {len(self.hotel_meta)} feature embeddings from cache")
+            
+            # Success if we have at least text embeddings
+            return self.text_embeddings is not None
+        except Exception as e:
+            print(f"Warning: failed to load cache: {e}")
+            return False
 
     def _build_and_cache_embeddings(self):
+        """Build and cache text and feature embeddings using selected model."""
         hotels_path = Path(self.csv_dir) / 'hotels.csv'
         if not hotels_path.exists():
             raise FileNotFoundError(f"{hotels_path} not found")
@@ -440,25 +538,65 @@ class EmbeddingRetriever:
             for row in reader:
                 rows.append(row)
 
-        texts = [self._hotel_text(r) for r in rows]
-        # compute embeddings in batches to be memory-friendly
-        all_vecs = []
-        batch_size = 32
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i+batch_size]
-            vecs = self.embedder.model.encode(batch, show_progress_bar=False)
-            all_vecs.append(vecs)
-            time.sleep(0.01)
-
         if np is None:
             raise RuntimeError('numpy is required for embedding retriever')
 
-        emb_array = np.vstack(all_vecs)
-        # Save cache
-        embeddings_path = self.cache_dir / 'hotel_embeddings.npz'
-        meta_path = self.cache_dir / 'hotel_meta.json'
-        np.savez_compressed(embeddings_path, emb_array)
-        # Build metadata list
+        # ===== TEXT EMBEDDINGS =====
+        print(f"[INFO] Building text embeddings with model: {self.embedding_model}")
+        texts = [self._hotel_text(r) for r in rows]
+        
+        # Load model if not using legacy embedder
+        if not self.embedder or not hasattr(self.embedder, 'model'):
+            try:
+                from sentence_transformers import SentenceTransformer
+                model_name = self.MODELS.get(self.embedding_model, self.MODELS['minilm'])
+                self.model = SentenceTransformer(model_name)
+                print(f"[OK] Loaded embedding model: {model_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to load embedding model: {e}")
+                raise
+        else:
+            self.model = self.embedder.model
+        
+        # Compute text embeddings in batches
+        all_text_vecs = []
+        batch_size = 32
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            vecs = self.model.encode(batch, show_progress_bar=False)
+            all_text_vecs.append(vecs)
+            time.sleep(0.01)
+        
+        text_emb_array = np.vstack(all_text_vecs)
+        self.text_embeddings = text_emb_array
+        
+        # Save text embeddings
+        text_emb_path = self.cache_dir / f'hotel_text_{self.embedding_model}.npz'
+        np.savez_compressed(text_emb_path, text_emb_array)
+        print(f"[OK] Cached text embeddings: {text_emb_array.shape}")
+
+        # ===== FEATURE EMBEDDINGS =====
+        if self.use_features:
+            print(f"[INFO] Building feature embeddings from numerical attributes")
+            feature_vecs = []
+            for r in rows:
+                feat_vec = self._extract_features(r)
+                feature_vecs.append(feat_vec)
+            
+            feature_emb_array = np.array(feature_vecs, dtype=float)
+            # Normalize feature vectors (zero mean, unit variance per dimension)
+            mean = np.mean(feature_emb_array, axis=0, keepdims=True)
+            std = np.std(feature_emb_array, axis=0, keepdims=True)
+            std[std == 0] = 1.0  # Avoid division by zero
+            feature_emb_array = (feature_emb_array - mean) / std
+            self.feature_embeddings = feature_emb_array
+            
+            # Save feature embeddings
+            feature_emb_path = self.cache_dir / 'hotel_features.npz'
+            np.savez_compressed(feature_emb_path, feature_emb_array)
+            print(f"[OK] Cached feature embeddings: {feature_emb_array.shape}")
+
+        # ===== METADATA =====
         self.hotel_meta = []
         for r in rows:
             self.hotel_meta.append({
@@ -467,10 +605,12 @@ class EmbeddingRetriever:
                 'city': r.get('city'),
                 'country': r.get('country'),
             })
+        
+        meta_path = self.cache_dir / 'hotel_meta.json'
         with open(meta_path, 'w', encoding='utf-8') as f:
             json.dump(self.hotel_meta, f, ensure_ascii=False, indent=2)
-        self.embeddings = emb_array
-        print(f"[OK] Built and cached {len(self.hotel_meta)} hotel embeddings")
+        
+        print(f"[OK] Built and cached embeddings for {len(self.hotel_meta)} hotels")
 
     def _cosine_sim(self, q: Any, matrix: Any) -> List[float]:
         # q: 1D vector, matrix: 2D array (n x d)
@@ -487,22 +627,75 @@ class EmbeddingRetriever:
         sims = np.dot(mat, q) / (mat_norms * q_norm)
         return sims.tolist()
 
-    def retrieve(self, query_embedding: Optional[List[float]], top_k: int = 10) -> Dict[str, Any]:
+    def retrieve(
+        self,
+        query_embedding: Optional[List[float]],
+        query_features: Optional[List[float]] = None,
+        top_k: int = 10,
+    ) -> Dict[str, Any]:
+        """Retrieve hotels using multi-modal similarity (text + features).
+        
+        Args:
+            query_embedding: Text embedding from user query
+            query_features: Optional feature vector (numerical attributes)
+            top_k: Number of results to return
+            
+        Returns:
+            Dict with status, results, and metadata about retrieval method
+        """
         if query_embedding is None:
-            return {'status': 'no_query_embedding', 'results': [], 'message': 'Query embedding missing'}
+            return {
+                'status': 'no_query_embedding',
+                'results': [],
+                'message': 'Query embedding missing'
+            }
 
-        if self.embeddings is None:
-            return {'status': 'no_embeddings', 'results': [], 'message': 'No hotel embeddings available'}
+        if self.text_embeddings is None:
+            return {
+                'status': 'no_embeddings',
+                'results': [],
+                'message': 'No hotel embeddings available'
+            }
 
-        sims = self._cosine_sim(query_embedding, self.embeddings)
-        idxs = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
+        # Compute text similarity
+        text_sims = self._cosine_sim(query_embedding, self.text_embeddings)
+        
+        # Compute feature similarity if available
+        feature_sims = None
+        if self.use_features and self.feature_embeddings is not None and query_features is not None:
+            feature_sims = self._cosine_sim(query_features, self.feature_embeddings)
+        
+        # Combine scores with weights
+        if feature_sims is not None:
+            # Hybrid: text_weight * text_sim + feature_weight * feature_sim
+            final_sims = [
+                self.text_weight * t + self.feature_weight * f
+                for t, f in zip(text_sims, feature_sims)
+            ]
+            retrieval_mode = f'hybrid_text_features (text_w={self.text_weight:.2f}, feat_w={self.feature_weight:.2f})'
+        else:
+            # Text-only
+            final_sims = text_sims
+            retrieval_mode = 'text_only'
+        
+        # Get top-k results
+        idxs = sorted(range(len(final_sims)), key=lambda i: final_sims[i], reverse=True)[:top_k]
         results = []
         for i in idxs:
             meta = self.hotel_meta[i].copy()
-            meta['score'] = float(sims[i])
+            meta['score'] = float(final_sims[i])
+            meta['text_score'] = float(text_sims[i])
+            if feature_sims is not None:
+                meta['feature_score'] = float(feature_sims[i])
             results.append(meta)
 
-        return {'status': 'success', 'results': results, 'count': len(results)}
+        return {
+            'status': 'success',
+            'results': results,
+            'count': len(results),
+            'embedding_model': self.embedding_model,
+            'retrieval_mode': retrieval_mode,
+        }
 
 
 # =====================================================================
@@ -511,22 +704,40 @@ class EmbeddingRetriever:
 # Combine results from both baseline and embedding approaches
 
 class HybridRetriever:
-    """Orchestrate baseline and embedding-based retrieval."""
+    """Orchestrate baseline and embedding-based retrieval with weighted merging."""
 
     def __init__(
         self,
         baseline_retriever: Optional[BaselineRetriever] = None,
         embedding_retriever: Optional[EmbeddingRetriever] = None,
+        baseline_weight: float = 0.6,
+        embedding_weight: float = 0.4,
     ):
         """
-        Initialize hybrid retriever with both components.
+        Initialize hybrid retriever with both components and configurable weights.
 
         Args:
             baseline_retriever: BaselineRetriever instance
             embedding_retriever: EmbeddingRetriever instance
+            baseline_weight: Weight for baseline results (0-1)
+            embedding_weight: Weight for embedding results (0-1)
+            
+        Note:
+            Weights don't need to sum to 1; they're normalized during merging.
         """
         self.baseline = baseline_retriever
         self.embedding = embedding_retriever
+        self.baseline_weight = max(0.0, baseline_weight)
+        self.embedding_weight = max(0.0, embedding_weight)
+        # Normalize weights
+        total = self.baseline_weight + self.embedding_weight
+        if total > 0:
+            self.baseline_weight /= total
+            self.embedding_weight /= total
+        else:
+            # Default to equal weights if both are zero
+            self.baseline_weight = 0.5
+            self.embedding_weight = 0.5
 
     def retrieve(
         self,
@@ -557,36 +768,63 @@ class HybridRetriever:
 
         # Build parameters from entities (handles multiple rating filters and countries)
         params = build_cypher_params(entities, intent=intent)
-
+        
         # Choose template: if rating_types present prefer 'hotel_filter' or 'comfortable_hotels'
         chosen_intent = intent
         rating_types = entities.get('rating_types') or []
-        if intent in ['hotel_search', 'hotel_filter'] and rating_types:
-            # If specific numeric rating types requested, use 'hotel_filter'
-            chosen_intent = 'hotel_filter'
+        
+        # Smart template selection based on available entities
+        if intent in ['hotel_search', 'hotel_filter']:
+            # Check if we have city or country
+            has_city = bool(params.get('city'))
+            has_country = bool(params.get('country'))
+            
+            if rating_types and has_city:
+                # City + rating-specific filters -> hotel_filter
+                chosen_intent = 'hotel_filter'
+            elif rating_types and has_country:
+                # Country-level with quality question -> show country results (now includes quality fields)
+                chosen_intent = 'hotels_by_country'
+            elif has_country and not has_city:
+                # Only country provided -> country query
+                chosen_intent = 'hotels_by_country'
+            elif has_city:
+                # City provided without explicit rating filters
+                chosen_intent = 'hotel_search'
+            # If neither city nor country, keep original intent (will fail gracefully)
         else:
             chosen_intent = intent
 
         # Run baseline if requested
         if method in ['baseline', 'hybrid']:
             if self.baseline:
-                template = CypherTemplates.get_template(chosen_intent)
-                # For visa_check, ensure both countries are present
+                # For visa_check intent, check if we need visa_free_destinations query
                 if chosen_intent == 'visa_check':
-                    if not params.get('from_country') or not params.get('to_country'):
+                    # If only from_country is provided (no to_country), use visa_free_destinations
+                    if params.get('from_country') and not params.get('to_country'):
+                        chosen_intent = 'visa_free_destinations'
+                    # If both countries provided, use regular visa_check
+                    elif not params.get('from_country'):
                         results['baseline_status'] = 'error'
                         results['baseline_results'] = []
-                        results['baseline_error'] = 'Both source and destination countries are required for visa queries'
+                        results['baseline_error'] = 'Source country is required for visa queries'
+                        # Don't execute query, skip to embedding
                     else:
-                        baseline_result = self.baseline.execute(template, params)
-                        results['baseline_results'] = baseline_result.get('results', [])
-                        results['baseline_status'] = baseline_result.get('status')
-                        if baseline_result.get('error'):
-                            results['baseline_error'] = baseline_result.get('error')
-                else:
+                        # Both countries provided, use regular visa_check
+                        pass
+                
+                template = CypherTemplates.get_template(chosen_intent)
+                
+                # Execute query if we have a valid template and params
+                if not results.get('baseline_error'):
                     baseline_result = self.baseline.execute(template, params)
                     results['baseline_results'] = baseline_result.get('results', [])
                     results['baseline_status'] = baseline_result.get('status')
+                    if baseline_result.get('error'):
+                        results['baseline_error'] = baseline_result.get('error')
+                else:
+                    # Error already set, skip execution
+                    pass
 
         # Run embedding if requested (skip for visa_check - embedding retriever is hotel-specific)
         if method in ['embeddings', 'hybrid'] and intent != 'visa_check':
@@ -619,20 +857,125 @@ class HybridRetriever:
 
         # Merge results if hybrid (skip merging for visa_check - different result types)
         if method == 'hybrid' and intent != 'visa_check':
-            # Simple merge: combine and deduplicate by hotel_id
-            seen_hotels = set()
-            merged = []
-            for item in results['baseline_results'] + results['embedding_results']:
-                hotel_id = item.get('hotel_id') or item.get('h', {}).get('hotel_id')
-                if hotel_id and hotel_id not in seen_hotels:
-                    merged.append(item)
-                    seen_hotels.add(hotel_id)
+            # Weighted merge: rank hotels by combining normalized scores from both methods
+            merged = self._weighted_merge(
+                results['baseline_results'],
+                results['embedding_results'],
+                top_k=50  # Merge more results, will be filtered by caller if needed
+            )
             results['merged_results'] = merged
+            results['merge_method'] = f'weighted (baseline={self.baseline_weight:.2f}, embedding={self.embedding_weight:.2f})'
         elif method == 'hybrid' and intent == 'visa_check':
             # For visa queries, merged_results should just be baseline_results (no hotels)
             results['merged_results'] = results['baseline_results']
+            results['merge_method'] = 'baseline_only'
 
         return results
+
+    def _weighted_merge(
+        self,
+        baseline_results: List[Dict[str, Any]],
+        embedding_results: List[Dict[str, Any]],
+        top_k: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Merge and rank results from baseline and embedding methods using weighted scoring.
+        
+        Args:
+            baseline_results: Results from Cypher queries
+            embedding_results: Results from embedding similarity
+            top_k: Maximum number of merged results to return
+            
+        Returns:
+            List of merged results, sorted by weighted score
+        """
+        # Build hotel score dict: hotel_id -> {data, baseline_rank, embedding_rank, scores}
+        hotel_scores: Dict[Any, Dict[str, Any]] = {}
+        
+        # Process baseline results (rank-based scoring: 1.0 for rank 1, decaying)
+        for rank, item in enumerate(baseline_results, start=1):
+            hotel_id = self._extract_hotel_id(item)
+            if hotel_id:
+                baseline_score = 1.0 / rank  # Reciprocal rank scoring
+                hotel_scores[hotel_id] = {
+                    'data': item,
+                    'baseline_score': baseline_score,
+                    'embedding_score': 0.0,
+                    'baseline_rank': rank,
+                    'embedding_rank': None,
+                }
+        
+        # Process embedding results (use similarity scores directly)
+        for rank, item in enumerate(embedding_results, start=1):
+            hotel_id = self._extract_hotel_id(item)
+            if hotel_id:
+                # Use cosine similarity score if available, else reciprocal rank
+                embedding_score = item.get('score', 1.0 / rank)
+                
+                if hotel_id in hotel_scores:
+                    # Hotel appears in both results - update with embedding info
+                    hotel_scores[hotel_id]['embedding_score'] = embedding_score
+                    hotel_scores[hotel_id]['embedding_rank'] = rank
+                else:
+                    # Hotel only in embedding results
+                    hotel_scores[hotel_id] = {
+                        'data': item,
+                        'baseline_score': 0.0,
+                        'embedding_score': embedding_score,
+                        'baseline_rank': None,
+                        'embedding_rank': rank,
+                    }
+        
+        # Compute weighted final scores
+        for hotel_id, info in hotel_scores.items():
+            final_score = (
+                self.baseline_weight * info['baseline_score'] +
+                self.embedding_weight * info['embedding_score']
+            )
+            info['final_score'] = final_score
+        
+        # Sort by final score (descending) and return top-k
+        ranked = sorted(
+            hotel_scores.values(),
+            key=lambda x: x['final_score'],
+            reverse=True
+        )[:top_k]
+        
+        # Build output list with score metadata
+        merged = []
+        for info in ranked:
+            result = info['data'].copy()
+            result['hybrid_score'] = info['final_score']
+            result['baseline_contribution'] = info['baseline_score'] * self.baseline_weight
+            result['embedding_contribution'] = info['embedding_score'] * self.embedding_weight
+            if info['baseline_rank']:
+                result['baseline_rank'] = info['baseline_rank']
+            if info['embedding_rank']:
+                result['embedding_rank'] = info['embedding_rank']
+            merged.append(result)
+        
+        return merged
+
+    def _extract_hotel_id(self, item: Dict[str, Any]) -> Any:
+        """Extract hotel_id from a result item (handles various formats)."""
+        # Try multiple ways to get hotel_id (Neo4j returns keys like 'h.hotel_id' with dots)
+        hotel_id = (
+            item.get('hotel_id') or
+            item.get('h.hotel_id') or
+            (item.get('h', {}).get('hotel_id') if isinstance(item.get('h'), dict) else None)
+        )
+        
+        # If no hotel_id, try to use hotel name as key
+        if not hotel_id:
+            hotel_name = (
+                item.get('hotel_name') or
+                item.get('h.name') or
+                (item.get('h', {}).get('name') if isinstance(item.get('h'), dict) else None) or
+                item.get('name')
+            )
+            if hotel_name:
+                hotel_id = f"name_{hotel_name}"
+        
+        return hotel_id
 
 
 # =====================================================================
@@ -716,13 +1059,13 @@ def build_cypher_params(entities: Dict[str, Optional[Any]], intent: Optional[str
                 params['from_country'] = country_val[0]
                 params['to_country'] = country_val[1]
             elif isinstance(country_val, list) and len(country_val) == 1:
-                # Only one country found - can't determine visa requirement
-                # Don't set parameters - query will fail gracefully
-                pass
+                # Only one country found - treat as from_country (for visa_free_destinations query)
+                params['from_country'] = country_val[0]
+                # to_country will be None, which triggers visa_free_destinations query
             else:
-                # Single country value - can't determine visa requirement
-                # Don't set parameters - query will fail gracefully
-                pass
+                # Single country value - treat as from_country (for visa_free_destinations query)
+                params['from_country'] = country_val
+                # to_country will be None, which triggers visa_free_destinations query
         else:
             # For other intents, use first country if list
             if isinstance(country_val, list):
@@ -740,9 +1083,12 @@ def build_cypher_params(entities: Dict[str, Optional[Any]], intent: Optional[str
 
     # Default numeric thresholds
     min_rating = entities.get('min_rating')
+    # If user hinted at quality (rating_types) but didn't give a number, default to 4.0
     if min_rating is None:
-        # sensible defaults
-        min_rating = 0.0
+        if entities.get('rating_types'):
+            min_rating = 4.0
+        else:
+            min_rating = 0.0
 
     # If user provided explicit rating_types (list), map them to template params
     rating_types = entities.get('rating_types') or []

@@ -23,6 +23,36 @@ from datetime import datetime
 
 
 # =====================================================================
+# FREE HUGGINGFACE MODELS CONFIGURATION
+# =====================================================================
+# Three accessible models for testing and comparison
+
+FREE_HF_MODELS = {
+    'llama-3.2-1b': {
+        'model_id': 'meta-llama/Llama-3.2-1B-Instruct',
+        'display_name': 'Llama 3.2 1B (Instruct)',
+        'type': 'instruct',
+        'description': 'Meta\'s efficient 1B parameter instruction-tuned model',
+        'cost_per_1k': 0.0,  # Free via Inference API
+    },
+    'mistral-7b': {
+        'model_id': 'mistralai/Mistral-7B-Instruct-v0.2',
+        'display_name': 'Mistral 7B (Instruct)',
+        'type': 'instruct',
+        'description': 'Mistral AI\'s 7B instruction-tuned model',
+        'cost_per_1k': 0.0,  # Free via Inference API
+    },
+    'gemma-2b': {
+        'model_id': 'google/gemma-2-2b-it',
+        'display_name': 'Gemma 2 2B (IT)',
+        'type': 'instruct',
+        'description': 'Google\'s lightweight 2B instruction-tuned model',
+        'cost_per_1k': 0.0,  # Free via Inference API
+    },
+}
+
+
+# =====================================================================
 # SECTION 1: CONTEXT MERGER
 # =====================================================================
 # Combine and structure KG results from baseline and embedding retrieval
@@ -95,10 +125,24 @@ class ContextMerger:
             if from_country and to_country:
                 return f"{from_country}->{to_country}"
         else:
-            # For hotel queries, use hotel_id
-            hotel_id = item.get('hotel_id') or item.get('h', {}).get('hotel_id')
+            # For hotel queries, try multiple ways to get hotel_id
+            # Neo4j returns keys like 'h.hotel_id' (with dots), not nested dicts
+            hotel_id = (
+                item.get('hotel_id') or 
+                item.get('h.hotel_id') or
+                (item.get('h', {}).get('hotel_id') if isinstance(item.get('h'), dict) else None)
+            )
             if hotel_id:
                 return str(hotel_id)
+            # Fallback: use hotel name if available
+            hotel_name = (
+                item.get('hotel_name') or 
+                item.get('h.name') or
+                (item.get('h', {}).get('name') if isinstance(item.get('h'), dict) else None) or
+                item.get('name')
+            )
+            if hotel_name:
+                return f"name_{hotel_name}"
         return None
     
     def format_context(self, merged_context: Dict[str, Any]) -> str:
@@ -117,46 +161,119 @@ class ContextMerger:
         if not items:
             return "No relevant information found in the knowledge graph."
         
-        if intent == 'visa_check':
+        if intent == 'visa_check' or intent == 'visa_free_destinations':
             # Format visa information
             lines = ["Visa Requirements Information:"]
             for item in items:
-                from_name = item.get('from_name') or item.get('from_country', 'Unknown')
-                to_name = item.get('to_name') or item.get('to_country', 'Unknown')
-                visa_type = item.get('v.visa_type') or item.get('visa_type', 'Not specified')
-                visa_status = item.get('visa_status', 'Unknown')
-                
-                lines.append(f"\nFrom: {from_name}")
-                lines.append(f"To: {to_name}")
-                lines.append(f"Visa Status: {visa_status}")
-                if visa_type and visa_type != 'Not specified':
-                    lines.append(f"Visa Type: {visa_type}")
+                # Check if this is a visa-free destinations list (has country_name)
+                if 'country_name' in item:
+                    # Visa-free destinations format
+                    country_name = item.get('country_name', 'Unknown')
+                    visa_status = item.get('visa_status', 'No visa required')
+                    lines.append(f"\n{country_name}: {visa_status}")
+                else:
+                    # Regular visa check format (from X to Y)
+                    from_name = item.get('from_name') or item.get('from_country', 'Unknown')
+                    to_name = item.get('to_name') or item.get('to_country', 'Unknown')
+                    visa_type = item.get('v.visa_type') or item.get('visa_type', 'Not specified')
+                    visa_status = item.get('visa_status', 'Unknown')
+                    
+                    lines.append(f"\nFrom: {from_name}")
+                    lines.append(f"To: {to_name}")
+                    lines.append(f"Visa Status: {visa_status}")
+                    if visa_type and visa_type != 'Not specified':
+                        lines.append(f"Visa Type: {visa_type}")
                 lines.append("---")
         else:
             # Format hotel information
             lines = ["Hotel Information from Knowledge Graph:"]
             for i, item in enumerate(items, 1):
-                hotel_name = item.get('hotel_name') or item.get('h', {}).get('name') or item.get('name', 'Unknown Hotel')
-                city = item.get('city') or item.get('h', {}).get('city', 'Unknown City')
-                country = item.get('country') or item.get('h', {}).get('country', 'Unknown Country')
+                # Handle Neo4j dot notation keys (e.g., 'h.name', 'h.hotel_id')
+                # Also handle direct keys returned from queries (e.g., 'city', 'country')
+                hotel_name = (
+                    item.get('hotel_name') or 
+                    item.get('h.name') or
+                    (item.get('h', {}).get('name') if isinstance(item.get('h'), dict) else None) or
+                    item.get('name') or
+                    'Unknown Hotel'
+                )
+                # City can be returned directly as 'city' or in dot notation
+                city = (
+                    item.get('city') or  # Direct key from query RETURN clause
+                    item.get('h.city') or  # Dot notation
+                    (item.get('h', {}).get('city') if isinstance(item.get('h'), dict) else None) or
+                    'Unknown City'
+                )
+                # Country can be returned directly as 'country' or in dot notation
+                country = (
+                    item.get('country') or  # Direct key from query RETURN clause
+                    item.get('h.country') or  # Dot notation
+                    (item.get('h', {}).get('country') if isinstance(item.get('h'), dict) else None) or
+                    'Unknown Country'
+                )
                 
                 lines.append(f"\n{i}. {hotel_name}")
                 lines.append(f"   Location: {city}, {country}")
                 
-                # Add ratings/scores if available
-                if 'average_reviews_score' in item or 'h' in item:
-                    score = item.get('average_reviews_score') or item.get('h', {}).get('average_reviews_score')
-                    if score:
-                        lines.append(f"   Average Rating: {score:.2f}")
+                # Add ratings/scores if available (handle dot notation)
+                score = (
+                    item.get('average_reviews_score') or 
+                    item.get('h.average_reviews_score') or
+                    (item.get('h', {}).get('average_reviews_score') if isinstance(item.get('h'), dict) else None)
+                )
+                if score:
+                    try:
+                        lines.append(f"   Average Rating: {float(score):.2f}")
+                    except (ValueError, TypeError):
+                        lines.append(f"   Average Rating: {score}")
                 
-                if 'star_rating' in item or 'h' in item:
-                    stars = item.get('star_rating') or item.get('h', {}).get('star_rating')
-                    if stars:
-                        lines.append(f"   Star Rating: {stars}")
+                stars = (
+                    item.get('star_rating') or 
+                    item.get('h.star_rating') or
+                    (item.get('h', {}).get('star_rating') if isinstance(item.get('h'), dict) else None)
+                )
+                if stars:
+                    lines.append(f"   Star Rating: {stars}")
+
+                # Quality dimensions
+                def _fmt(val):
+                    try:
+                        return f"{float(val):.2f}"
+                    except (ValueError, TypeError):
+                        return val if val is not None else None
+
+                cleanliness = item.get('cleanliness_base') or item.get('h.cleanliness_base') or (item.get('h', {}).get('cleanliness_base') if isinstance(item.get('h'), dict) else None)
+                comfort = item.get('comfort_base') or item.get('h.comfort_base') or (item.get('h', {}).get('comfort_base') if isinstance(item.get('h'), dict) else None)
+                facilities = item.get('facilities_base') or item.get('h.facilities_base') or (item.get('h', {}).get('facilities_base') if isinstance(item.get('h'), dict) else None)
+                location = item.get('location_base') or item.get('h.location_base') or (item.get('h', {}).get('location_base') if isinstance(item.get('h'), dict) else None)
+                staff = item.get('staff_base') or item.get('h.staff_base') or (item.get('h', {}).get('staff_base') if isinstance(item.get('h'), dict) else None)
+                value_money = item.get('value_for_money_base') or item.get('h.value_for_money_base') or (item.get('h', {}).get('value_for_money_base') if isinstance(item.get('h'), dict) else None)
+
+                quality_lines = []
+                if cleanliness is not None:
+                    quality_lines.append(f"Cleanliness: {_fmt(cleanliness)}")
+                if comfort is not None:
+                    quality_lines.append(f"Comfort: {_fmt(comfort)}")
+                if facilities is not None:
+                    quality_lines.append(f"Facilities: {_fmt(facilities)}")
+                if location is not None:
+                    quality_lines.append(f"Location: {_fmt(location)}")
+                if staff is not None:
+                    quality_lines.append(f"Staff: {_fmt(staff)}")
+                if value_money is not None:
+                    quality_lines.append(f"Value for money: {_fmt(value_money)}")
+
+                if quality_lines:
+                    lines.append("   Quality Scores:")
+                    for ql in quality_lines:
+                        lines.append(f"     - {ql}")
                 
                 # Add embedding score if available
                 if 'score' in item:
-                    lines.append(f"   Relevance Score: {item['score']:.3f}")
+                    try:
+                        lines.append(f"   Relevance Score: {float(item['score']):.3f}")
+                    except (ValueError, TypeError):
+                        lines.append(f"   Relevance Score: {item['score']}")
                 
                 lines.append("---")
         
@@ -846,32 +963,257 @@ class ModelComparison:
     accuracy_score: Optional[float] = None
     relevance_score: Optional[float] = None
     naturalness_score: Optional[float] = None
+    correctness_score: Optional[float] = None
+    grounding_score: Optional[float] = None
     notes: Optional[str] = None
 
 
-class ModelEvaluator:
-    """Evaluate and compare LLM models."""
+class QualitativeEvaluator:
+    """Evaluate LLM responses with detailed qualitative rubric."""
+    
+    RUBRIC = {
+        'accuracy': {
+            'description': 'Response contains factually correct information from context',
+            'scores': {
+                5: 'All information accurate, no hallucinations',
+                4: 'Mostly accurate with minor irrelevant details',
+                3: 'Partially accurate, some errors',
+                2: 'Many inaccuracies or contradictions',
+                1: 'Completely inaccurate or made-up information'
+            }
+        },
+        'relevance': {
+            'description': 'Response directly addresses the user query',
+            'scores': {
+                5: 'Directly answers query with perfect relevance',
+                4: 'Mostly relevant with minor tangents',
+                3: 'Somewhat relevant but includes off-topic content',
+                2: 'Barely addresses the query',
+                1: 'Completely irrelevant response'
+            }
+        },
+        'naturalness': {
+            'description': 'Response is fluent, coherent, and human-like',
+            'scores': {
+                5: 'Perfect fluency, natural conversation',
+                4: 'Good fluency with minor awkwardness',
+                3: 'Understandable but somewhat robotic',
+                2: 'Awkward phrasing, hard to follow',
+                1: 'Incoherent or nonsensical'
+            }
+        },
+        'correctness': {
+            'description': 'Response correctly interprets and uses context',
+            'scores': {
+                5: 'Perfect use of context, no misinterpretation',
+                4: 'Good use with minor omissions',
+                3: 'Uses context but misses key details',
+                2: 'Misinterprets context significantly',
+                1: 'Ignores or contradicts context'
+            }
+        },
+        'grounding': {
+            'description': 'Response stays grounded in provided context',
+            'scores': {
+                5: 'All claims backed by context, no hallucination',
+                4: 'Mostly grounded with minimal speculation',
+                3: 'Some ungrounded claims',
+                2: 'Significant hallucination',
+                1: 'Completely fabricated information'
+            }
+        }
+    }
     
     def __init__(self):
-        """Initialize evaluator."""
+        """Initialize qualitative evaluator."""
         pass
+    
+    def evaluate(self, response_text: str, context: str, query: str) -> Dict[str, float]:
+        """Evaluate response using automated heuristics.
+        
+        Args:
+            response_text: Generated response
+            context: Original context provided
+            query: User query
+            
+        Returns:
+            Dict with scores for each rubric dimension
+        """
+        scores = {}
+        
+        # Accuracy: Check for context word overlap
+        context_words = set(context.lower().split())
+        response_words = set(response_text.lower().split())
+        overlap = len(context_words.intersection(response_words))
+        overlap_ratio = overlap / max(len(context_words), 1)
+        scores['accuracy'] = min(5, max(1, int(overlap_ratio * 5) + 1))
+        
+        # Relevance: Check query word presence
+        query_words = set(query.lower().split()) - {'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for'}
+        query_in_response = len(query_words.intersection(response_words)) / max(len(query_words), 1)
+        scores['relevance'] = min(5, max(1, int(query_in_response * 5) + 1))
+        
+        # Naturalness: Basic heuristics
+        has_complete_sentences = response_text.count('.') > 0 or response_text.count('!') > 0
+        reasonable_length = 20 < len(response_text.split()) < 500
+        no_excessive_repetition = len(set(response_text.split())) / max(len(response_text.split()), 1) > 0.5
+        naturalness_score = sum([has_complete_sentences, reasonable_length, no_excessive_repetition]) + 2
+        scores['naturalness'] = min(5, max(1, naturalness_score))
+        
+        # Correctness: Check for specific context entities
+        context_entities = [w for w in context.split() if len(w) > 3 and w[0].isupper()]
+        entities_mentioned = sum(1 for e in context_entities if e in response_text)
+        entity_ratio = entities_mentioned / max(len(context_entities), 1)
+        scores['correctness'] = min(5, max(1, int(entity_ratio * 5) + 1))
+        
+        # Grounding: Check for hallucination indicators
+        hallucination_phrases = ['i think', 'probably', 'might be', 'maybe', 'i\'m not sure']
+        has_uncertainty = any(phrase in response_text.lower() for phrase in hallucination_phrases)
+        has_specific_numbers = bool(context_words.intersection(set([str(i) for i in range(10)])))
+        numbers_match = has_specific_numbers and any(str(i) in response_text for i in range(10))
+        grounding_score = 5 - (2 if has_uncertainty else 0) + (1 if numbers_match else 0)
+        scores['grounding'] = min(5, max(1, grounding_score))
+        
+        return scores
+    
+    def manual_evaluate(self, response_text: str, context: str, query: str) -> Dict[str, float]:
+        """Placeholder for manual evaluation (returns automated scores).
+        
+        In a real system, this would prompt a human evaluator.
+        For now, returns automated scores.
+        """
+        return self.evaluate(response_text, context, query)
+    
+    def get_rubric_description(self, dimension: str) -> str:
+        """Get human-readable rubric description."""
+        if dimension in self.RUBRIC:
+            rubric = self.RUBRIC[dimension]
+            lines = [f"{dimension.upper()}: {rubric['description']}", ""]
+            for score, desc in sorted(rubric['scores'].items(), reverse=True):
+                lines.append(f"  {score}: {desc}")
+            return "\n".join(lines)
+        return "Unknown dimension"
+    
+    def calculate_overall_score(self, scores: Dict[str, float]) -> float:
+        """Calculate weighted overall score.
+        
+        Weights: accuracy=0.3, relevance=0.25, correctness=0.25, grounding=0.15, naturalness=0.05
+        """
+        weights = {
+            'accuracy': 0.3,
+            'relevance': 0.25,
+            'correctness': 0.25,
+            'grounding': 0.15,
+            'naturalness': 0.05
+        }
+        total = sum(scores.get(dim, 3) * weight for dim, weight in weights.items())
+        return round(total, 2)
+
+
+class TestCase:
+    """Test case with query, context, and expected characteristics."""
+    
+    def __init__(self, query: str, context: str, expected_keywords: List[str], 
+                 intent: str = 'hotel_search', difficulty: str = 'medium'):
+        self.query = query
+        self.context = context
+        self.expected_keywords = expected_keywords
+        self.intent = intent
+        self.difficulty = difficulty
+
+
+class TestSuite:
+    """Collection of test cases for systematic evaluation."""
+    
+    STANDARD_TESTS = [
+        TestCase(
+            query="Find hotels in Cairo with rating > 4",
+            context="Hotel Information from Knowledge Graph:\n\n1. Nile Grandeur\n   Location: Cairo, Egypt\n   Average Rating: 4.50\n   Star Rating: 5\n   Quality Scores:\n     - Cleanliness: 8.50\n     - Comfort: 8.20\n---",
+            expected_keywords=['Nile Grandeur', 'Cairo', '4.5', 'rating'],
+            intent='hotel_search',
+            difficulty='easy'
+        ),
+        TestCase(
+            query="Which hotels in Paris have excellent cleanliness and staff service?",
+            context="Hotel Information from Knowledge Graph:\n\n1. Le Parisien Luxe\n   Location: Paris, France\n   Average Rating: 4.70\n   Quality Scores:\n     - Cleanliness: 9.20\n     - Staff: 9.10\n---\n\n2. Budget Inn Paris\n   Location: Paris, France\n   Average Rating: 3.20\n   Quality Scores:\n     - Cleanliness: 6.50\n     - Staff: 6.80\n---",
+            expected_keywords=['Le Parisien', 'cleanliness', 'staff', '9.2', '9.1'],
+            intent='hotel_filter',
+            difficulty='medium'
+        ),
+        TestCase(
+            query="What visa requirements are there from Egypt to France?",
+            context="Visa Requirements Information:\n\nFrom: Egypt\nTo: France\nVisa Status: Visa required\nVisa Type: Schengen\n---",
+            expected_keywords=['visa required', 'Schengen', 'Egypt', 'France'],
+            intent='visa_check',
+            difficulty='easy'
+        ),
+        TestCase(
+            query="Recommend family-friendly hotels in Dubai with good facilities",
+            context="Hotel Information from Knowledge Graph:\n\n1. Dubai Family Resort\n   Location: Dubai, UAE\n   Average Rating: 4.60\n   Quality Scores:\n     - Facilities: 9.00\n     - Comfort: 8.80\n---\n\n2. Business Tower Dubai\n   Location: Dubai, UAE\n   Average Rating: 4.40\n   Quality Scores:\n     - Facilities: 7.50\n     - Staff: 8.20\n---",
+            expected_keywords=['Dubai Family Resort', 'facilities', '9.0', 'family'],
+            intent='recommendation',
+            difficulty='medium'
+        ),
+        TestCase(
+            query="Compare hotels in Tokyo and Osaka for business travelers",
+            context="Hotel Information from Knowledge Graph:\n\n1. Tokyo Business Center\n   Location: Tokyo, Japan\n   Average Rating: 4.55\n   Quality Scores:\n     - Location: 9.50\n     - Facilities: 8.70\n---\n\n2. Osaka Executive\n   Location: Osaka, Japan\n   Average Rating: 4.45\n   Quality Scores:\n     - Location: 8.90\n     - Facilities: 8.50\n---",
+            expected_keywords=['Tokyo', 'Osaka', 'business', 'location', 'facilities'],
+            intent='comparison',
+            difficulty='hard'
+        ),
+    ]
+    
+    def __init__(self, custom_tests: Optional[List[TestCase]] = None):
+        """Initialize test suite.
+        
+        Args:
+            custom_tests: Optional custom test cases (uses STANDARD_TESTS if None)
+        """
+        self.tests = custom_tests if custom_tests else self.STANDARD_TESTS
+    
+    def get_test(self, index: int) -> Optional[TestCase]:
+        """Get test case by index."""
+        return self.tests[index] if 0 <= index < len(self.tests) else None
+    
+    def get_tests_by_difficulty(self, difficulty: str) -> List[TestCase]:
+        """Get all tests of a specific difficulty."""
+        return [t for t in self.tests if t.difficulty == difficulty]
+    
+    def get_tests_by_intent(self, intent: str) -> List[TestCase]:
+        """Get all tests for a specific intent."""
+        return [t for t in self.tests if t.intent == intent]
+
+
+class ModelEvaluator:
+    """Evaluate and compare LLM models with test suite support."""
+    
+    def __init__(self, test_suite: Optional[TestSuite] = None):
+        """Initialize evaluator.
+        
+        Args:
+            test_suite: Optional test suite (creates default if None)
+        """
+        self.test_suite = test_suite if test_suite else TestSuite()
+        self.qual_evaluator = QualitativeEvaluator()
     
     def evaluate_response(
         self,
         response: LLMResponse,
         context: str,
-        user_query: str
+        user_query: str,
+        include_qualitative: bool = True
     ) -> Dict[str, Any]:
         """
-        Evaluate a single response (quantitative metrics).
+        Evaluate a single response with quantitative and qualitative metrics.
         
         Args:
             response: LLMResponse to evaluate
             context: Original context used
             user_query: Original user query
+            include_qualitative: Whether to include qualitative scoring
         
         Returns:
-            Dict with evaluation metrics
+            Dict with comprehensive evaluation metrics
         """
         metrics = {
             'model_name': response.model_name,
@@ -882,7 +1224,13 @@ class ModelEvaluator:
             'has_error': response.error is not None,
         }
         
-        # Calculate some basic quality metrics
+        # Error analysis
+        if response.error:
+            metrics['error_type'] = self._classify_error(response.error)
+            metrics['error_severity'] = self._assess_error_severity(response.error)
+            metrics['error_message'] = response.error
+        
+        # Calculate quantitative quality metrics
         if response.text and not response.error:
             # Check if response mentions context keywords
             context_words = set(context.lower().split())
@@ -892,22 +1240,60 @@ class ModelEvaluator:
             
             # Check if response is too short (might be incomplete)
             metrics['is_too_short'] = len(response.text.split()) < 10
+            
+            # Check for hallucination indicators
+            hallucination_markers = ['i think', 'probably', 'might be', 'maybe', 'not sure']
+            metrics['hallucination_risk'] = sum(1 for m in hallucination_markers if m in response.text.lower())
+            
+            # Qualitative evaluation
+            if include_qualitative:
+                qual_scores = self.qual_evaluator.evaluate(response.text, context, user_query)
+                metrics['qualitative_scores'] = qual_scores
+                metrics['overall_quality'] = self.qual_evaluator.calculate_overall_score(qual_scores)
         
         return metrics
+    
+    def _classify_error(self, error_msg: str) -> str:
+        """Classify error type for analysis."""
+        error_lower = error_msg.lower()
+        if 'timeout' in error_lower or 'timed out' in error_lower:
+            return 'timeout'
+        elif 'api' in error_lower or 'key' in error_lower:
+            return 'authentication'
+        elif 'rate limit' in error_lower or 'quota' in error_lower:
+            return 'rate_limit'
+        elif 'not available' in error_lower or 'not found' in error_lower:
+            return 'availability'
+        elif 'token' in error_lower or 'length' in error_lower:
+            return 'token_limit'
+        else:
+            return 'unknown'
+    
+    def _assess_error_severity(self, error_msg: str) -> str:
+        """Assess error severity."""
+        error_type = self._classify_error(error_msg)
+        if error_type in ['authentication', 'availability']:
+            return 'critical'
+        elif error_type in ['rate_limit', 'timeout']:
+            return 'moderate'
+        else:
+            return 'low'
     
     def compare_responses(
         self,
         responses: Dict[str, LLMResponse],
         context: str,
-        user_query: str
+        user_query: str,
+        include_qualitative: bool = True
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Compare multiple responses and generate comparison report.
+        Compare multiple responses with comprehensive metrics.
         
         Args:
             responses: Dict mapping model_name to LLMResponse
             context: Original context used
             user_query: Original user query
+            include_qualitative: Whether to include qualitative evaluation
         
         Returns:
             Dict mapping model_name to evaluation metrics
@@ -915,57 +1301,192 @@ class ModelEvaluator:
         comparisons = {}
         
         for model_name, response in responses.items():
-            metrics = self.evaluate_response(response, context, user_query)
+            metrics = self.evaluate_response(response, context, user_query, include_qualitative)
             comparisons[model_name] = metrics
         
         return comparisons
     
+    def run_test_suite(
+        self,
+        orchestrator: 'LLMOrchestrator',
+        model_names: Optional[List[str]] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """Run all test cases and aggregate results.
+        
+        Args:
+            orchestrator: LLMOrchestrator with providers
+            model_names: Models to test (uses all if None)
+            
+        Returns:
+            Dict with aggregated results per model
+        """
+        if model_names is None:
+            model_names = list(orchestrator.providers.keys())
+        
+        results = {model: {'tests': [], 'aggregate': {}} for model in model_names}
+        
+        for i, test in enumerate(self.test_suite.tests):
+            print(f"Running test {i+1}/{len(self.test_suite.tests)}: {test.query[:50]}...")
+            
+            # Create mock retrieval result
+            mock_retrieval = {
+                'intent': test.intent,
+                'method': 'baseline',
+                'baseline_results': [],
+                'embedding_results': [],
+                'merged_results': []
+            }
+            
+            # Generate responses from all models
+            for model_name in model_names:
+                if model_name not in orchestrator.providers:
+                    continue
+                
+                response = orchestrator.generate_response(
+                    test.query,
+                    mock_retrieval,
+                    model_name=model_name
+                )
+                
+                # Evaluate response
+                metrics = self.evaluate_response(response, test.context, test.query)
+                metrics['test_index'] = i
+                metrics['difficulty'] = test.difficulty
+                metrics['expected_keywords_found'] = sum(
+                    1 for kw in test.expected_keywords 
+                    if kw.lower() in response.text.lower()
+                ) if not response.error else 0
+                
+                results[model_name]['tests'].append(metrics)
+        
+        # Aggregate statistics
+        for model_name in model_names:
+            tests = results[model_name]['tests']
+            if tests:
+                results[model_name]['aggregate'] = {
+                    'avg_response_time': sum(t['response_time'] for t in tests) / len(tests),
+                    'avg_tokens': sum(t.get('tokens_used', 0) for t in tests if t.get('tokens_used')) / max(1, len([t for t in tests if t.get('tokens_used')])),
+                    'total_cost': sum(t.get('cost', 0) for t in tests if t.get('cost')),
+                    'error_rate': sum(1 for t in tests if t['has_error']) / len(tests),
+                    'avg_quality': sum(t.get('overall_quality', 0) for t in tests if t.get('overall_quality')) / max(1, len([t for t in tests if t.get('overall_quality')])),
+                }
+        
+        return results
+    
     def generate_comparison_report(
         self,
         comparisons: Dict[str, Dict[str, Any]],
-        responses: Dict[str, LLMResponse]
+        responses: Dict[str, LLMResponse],
+        include_cost_analysis: bool = True,
+        include_qualitative: bool = True
     ) -> str:
         """
-        Generate human-readable comparison report.
+        Generate comprehensive comparison report with cost analysis.
         
         Args:
             comparisons: Output from compare_responses()
             responses: Dict mapping model_name to LLMResponse
+            include_cost_analysis: Whether to include detailed cost breakdown
+            include_qualitative: Whether to include qualitative scores
         
         Returns:
             Formatted comparison report string
         """
-        lines = ["=" * 80]
+        lines = ["=" * 100]
         lines.append("LLM MODEL COMPARISON REPORT")
-        lines.append("=" * 80)
+        lines.append("=" * 100)
         lines.append("")
         
         # Quantitative metrics table
         lines.append("QUANTITATIVE METRICS:")
-        lines.append("-" * 80)
-        lines.append(f"{'Model':<30} {'Time(s)':<10} {'Tokens':<10} {'Cost($)':<10} {'Length':<10}")
-        lines.append("-" * 80)
+        lines.append("-" * 100)
+        lines.append(f"{'Model':<30} {'Time(s)':<10} {'Tokens':<10} {'Cost($)':<12} {'Length':<10} {'Errors':<10}")
+        lines.append("-" * 100)
         
         for model_name, metrics in comparisons.items():
             time_str = f"{metrics.get('response_time', 0):.2f}"
             tokens_str = str(metrics.get('tokens_used', 'N/A'))
             cost_str = f"${metrics.get('cost', 0):.4f}" if metrics.get('cost') else "Free"
             length_str = str(metrics.get('response_length', 0))
+            error_str = "Yes" if metrics.get('has_error') else "No"
             
-            lines.append(f"{model_name:<30} {time_str:<10} {tokens_str:<10} {cost_str:<10} {length_str:<10}")
+            lines.append(f"{model_name:<30} {time_str:<10} {tokens_str:<10} {cost_str:<12} {length_str:<10} {error_str:<10}")
         
+        # Cost comparison analysis
+        if include_cost_analysis:
+            lines.append("")
+            lines.append("COST ANALYSIS:")
+            lines.append("-" * 100)
+            
+            # Calculate cost statistics
+            paid_models = {k: v for k, v in comparisons.items() if v.get('cost', 0) > 0}
+            free_models = {k: v for k, v in comparisons.items() if v.get('cost', 0) == 0 and not v.get('has_error')}
+            
+            if paid_models:
+                lines.append("\nPaid Models:")
+                for model_name, metrics in sorted(paid_models.items(), key=lambda x: x[1].get('cost', 0), reverse=True):
+                    cost = metrics.get('cost', 0)
+                    tokens = metrics.get('tokens_used', 0)
+                    cost_per_token = (cost / tokens * 1000) if tokens else 0
+                    lines.append(f"  {model_name}: ${cost:.4f} (${cost_per_token:.6f} per 1K tokens)")
+            
+            if free_models:
+                lines.append("\nFree Models:")
+                for model_name in free_models.keys():
+                    lines.append(f"  {model_name}: Free (Inference API)")
+            
+            # Cost savings calculation
+            if paid_models and free_models:
+                avg_paid_cost = sum(m.get('cost', 0) for m in paid_models.values()) / len(paid_models)
+                lines.append(f"\n💰 Cost Savings: Using free models saves ~${avg_paid_cost:.4f} per query")
+        
+        # Qualitative scores table
+        if include_qualitative:
+            lines.append("")
+            lines.append("QUALITATIVE SCORES (1-5 scale):")
+            lines.append("-" * 100)
+            lines.append(f"{'Model':<30} {'Accuracy':<12} {'Relevance':<12} {'Correct':<12} {'Ground':<12} {'Overall':<12}")
+            lines.append("-" * 100)
+            
+            for model_name, metrics in comparisons.items():
+                if 'qualitative_scores' in metrics:
+                    scores = metrics['qualitative_scores']
+                    acc = f"{scores.get('accuracy', 0):.1f}"
+                    rel = f"{scores.get('relevance', 0):.1f}"
+                    cor = f"{scores.get('correctness', 0):.1f}"
+                    grd = f"{scores.get('grounding', 0):.1f}"
+                    ovr = f"{metrics.get('overall_quality', 0):.2f}"
+                    lines.append(f"{model_name:<30} {acc:<12} {rel:<12} {cor:<12} {grd:<12} {ovr:<12}")
+                else:
+                    lines.append(f"{model_name:<30} {'N/A':<12} {'N/A':<12} {'N/A':<12} {'N/A':<12} {'N/A':<12}")
+        
+        # Error analysis
+        errors = {k: v for k, v in comparisons.items() if v.get('has_error')}
+        if errors:
+            lines.append("")
+            lines.append("ERROR ANALYSIS:")
+            lines.append("-" * 100)
+            for model_name, metrics in errors.items():
+                error_type = metrics.get('error_type', 'unknown')
+                severity = metrics.get('error_severity', 'unknown')
+                lines.append(f"  {model_name}: {error_type} (severity: {severity})")
+                lines.append(f"    Message: {metrics.get('error_message', 'N/A')[:80]}...")
+        
+        # Response samples
         lines.append("")
-        lines.append("QUALITATIVE EVALUATION:")
-        lines.append("-" * 80)
+        lines.append("RESPONSE SAMPLES:")
+        lines.append("-" * 100)
         
         for model_name, response in responses.items():
             lines.append(f"\n{model_name}:")
-            lines.append(f"Response: {response.text[:200]}..." if len(response.text) > 200 else f"Response: {response.text}")
             if response.error:
-                lines.append(f"Error: {response.error}")
-            lines.append("")
+                lines.append(f"  ❌ Error: {response.error[:100]}...")
+            else:
+                preview = response.text[:200] if len(response.text) > 200 else response.text
+                lines.append(f"  {preview}..." if len(response.text) > 200 else f"  {preview}")
         
-        lines.append("=" * 80)
+        lines.append("")
+        lines.append("=" * 100)
         
         return "\n".join(lines)
 
@@ -1008,14 +1529,22 @@ if __name__ == '__main__':
     # Initialize orchestrator
     orchestrator = LLMOrchestrator(theme='hotel')
     
-    # Add providers (using free/local models for demo)
+    # Add providers (using free models for demo)
     print("\nInitializing LLM providers...")
     
-    # HuggingFace (free, local)
-    hf_provider = HuggingFaceProvider(model_name="gpt2")
-    if hf_provider.available:
-        orchestrator.add_provider(hf_provider)
-        print(f"[OK] Added HuggingFace provider: {hf_provider.model_name}")
+    # Add all three free HuggingFace models
+    for model_key, model_config in FREE_HF_MODELS.items():
+        print(f"\nLoading {model_config['display_name']}...")
+        hf_provider = HuggingFaceProvider(
+            model_name=model_config['model_id'],
+            use_inference_api=True
+        )
+        if hf_provider.available:
+            hf_provider.display_name = model_config['display_name']
+            orchestrator.add_provider(hf_provider)
+            print(f"[OK] Added {model_config['display_name']}")
+        else:
+            print(f"[SKIP] {model_config['display_name']} not available")
     
     # OpenAI (requires API key)
     openai_provider = OpenAIProvider(model_name="gpt-3.5-turbo")
@@ -1057,14 +1586,53 @@ if __name__ == '__main__':
             
             responses = orchestrator.compare_models(test_query, mock_retrieval)
             
-            # Evaluate
+            # Evaluate with enhanced metrics
             evaluator = ModelEvaluator()
             context = orchestrator.context_merger.format_context(
                 orchestrator.context_merger.merge_results(mock_retrieval)
             )
-            comparisons = evaluator.compare_responses(responses, context, test_query)
-            report = evaluator.generate_comparison_report(comparisons, responses)
+            comparisons = evaluator.compare_responses(
+                responses, 
+                context, 
+                test_query,
+                include_qualitative=True
+            )
+            report = evaluator.generate_comparison_report(
+                comparisons, 
+                responses,
+                include_cost_analysis=True,
+                include_qualitative=True
+            )
             print(report)
+            
+            # Run test suite if time permits
+            print(f"\n{'='*80}")
+            print("Test Suite Evaluation (first 2 tests)")
+            print(f"{'='*80}\n")
+            
+            test_suite = TestSuite()
+            for i in range(min(2, len(test_suite.tests))):
+                test = test_suite.get_test(i)
+                print(f"\nTest {i+1}: {test.query}")
+                print(f"Difficulty: {test.difficulty}")
+                print(f"Expected keywords: {', '.join(test.expected_keywords)}\n")
+                
+                # Quick single model test
+                model_name = list(orchestrator.providers.keys())[0]
+                mock_test_retrieval = {
+                    'intent': test.intent,
+                    'method': 'baseline',
+                    'baseline_results': [],
+                    'embedding_results': [],
+                    'merged_results': []
+                }
+                response = orchestrator.generate_response(test.query, mock_test_retrieval, model_name)
+                metrics = evaluator.evaluate_response(response, test.context, test.query)
+                
+                print(f"Response: {response.text[:150]}..." if len(response.text) > 150 else f"Response: {response.text}")
+                if 'qualitative_scores' in metrics:
+                    print(f"Quality Score: {metrics.get('overall_quality', 0):.2f}/5.0")
+                print("-" * 80)
     else:
         print("No LLM providers available. Install required packages and set API keys.")
 

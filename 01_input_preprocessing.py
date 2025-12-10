@@ -49,7 +49,9 @@ class HotelIntentClassifier:
             'value_filter': ['value', 'price', 'budget', 'cheap', 'expensive', 'affordable', 'deal'],
             
             # Visa and travel requirements
-            'visa_check': ['visa', 'need visa', 'visa requirement', 'travel document', 'passport', 'requirement'],
+            'visa_check': ['visa', 'need visa', 'visa requirement', 'travel document', 'passport', 'requirement', 
+                          'where can i go', 'where can i travel', 'countries can i go', 'destinations', 
+                          'without visa', 'visa free', 'no visa required'],
             
             # Demographic/personalization intents
             'demographic_search': ['family', 'couple', 'solo', 'business', 'honeymoon', 'group'],
@@ -88,8 +90,21 @@ class HotelIntentClassifier:
         confidence = 'low'
         rating_types = []
 
+        # Hard-prioritize visa intent so it is not shadowed by generic words like "where"
+        visa_keywords = self.intents.get('visa_check', [])
+        if any(kw in text_lower for kw in visa_keywords):
+            return {
+                'intent': 'visa_check',
+                'theme': self.theme,
+                'confidence': 'high',
+                'rating_types': rating_types,
+                'user_input': user_input,
+            }
+
         # Match keywords in priority order
         for intent, keywords in self.intents.items():
+            if intent == 'visa_check':
+                continue  # already handled with priority above
             for keyword in keywords:
                 if keyword in text_lower:
                     matched_intent = intent
@@ -98,13 +113,12 @@ class HotelIntentClassifier:
             if confidence == 'high':
                 break
 
-        # If a rating-related intent is detected, identify all rating types mentioned
-        if 'filter' in matched_intent or 'rating' in matched_intent:
-            for rtype, keywords in self.rating_types.items():
-                for keyword in keywords:
-                    if keyword in text_lower:
-                        rating_types.append(rtype)
-                        break  # Move to next rating type once found
+        # Always collect rating types mentioned in the text (even if intent is hotel_search)
+        for rtype, keywords in self.rating_types.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    rating_types.append(rtype)
+                    break  # Move to next rating type once found
 
         return {
             'intent': matched_intent,
@@ -199,6 +213,14 @@ class HotelEntityExtractor:
             except Exception as e:
                 print(f"Warning: could not load visa.csv: {e}")
 
+        # Add common country aliases for better matching
+        aliases = [
+            'usa', 'u.s.a', 'united states', 'united states of america', 'america',
+            'uk', 'u.k', 'united kingdom', 'great britain', 'britain'
+        ]
+        for alias in aliases:
+            lookups['countries'].add(alias)
+
         return lookups
 
     def _fuzzy_match(self, text: str, candidates: Set[str], cutoff: float = 0.75) -> Optional[str]:
@@ -271,6 +293,72 @@ class HotelEntityExtractor:
 
         return matches
 
+    def _extract_rating(self, user_input: str) -> Optional[float]:
+        """
+        Extract numeric rating threshold from user input.
+        
+        Handles patterns like:
+          - "rating > 4", "> 4.5", "greater than 4"
+          - "4+", "4+ stars", "at least 4.5"
+          - "minimum 4", "min 4.5"
+        
+        Args:
+            user_input: Raw user query
+        
+        Returns:
+            Extracted rating as float or None
+        """
+        text = user_input.lower()
+        
+        # Pattern 1: "> X", "greater than X", "more than X"
+        patterns = [
+            r'>\s*(\d+(?:\.\d+)?)',
+            r'greater\s+than\s+(\d+(?:\.\d+)?)',
+            r'more\s+than\s+(\d+(?:\.\d+)?)',
+            r'above\s+(\d+(?:\.\d+)?)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    return float(match.group(1))
+                except ValueError:
+                    pass
+        
+        # Pattern 2: "X+", "X+ stars", "X plus"
+        match = re.search(r'(\d+(?:\.\d+)?)\s*\+', text)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                pass
+        
+        # Pattern 3: "at least X", "minimum X", "min X"
+        patterns = [
+            r'at\s+least\s+(\d+(?:\.\d+)?)',
+            r'minimum\s+(?:of\s+)?(\d+(?:\.\d+)?)',
+            r'min\s+(\d+(?:\.\d+)?)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    return float(match.group(1))
+                except ValueError:
+                    pass
+        
+        # Pattern 4: "X stars", "X star rating" (without comparison)
+        match = re.search(r'(\d+(?:\.\d+)?)\s*(?:star|stars)', text)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                pass
+        
+        return None
+
     def extract(self, user_input: str) -> Dict[str, Optional[any]]:
         """
         Extract entities from user input restricted to the Step 1 requirements.
@@ -286,6 +374,7 @@ class HotelEntityExtractor:
               - traveller_type: business, family, couple, solo, etc. (or None)
               - age_group: detected age group (e.g., '25-34') or None
               - gender: detected gender mention (male/female/other) or None
+              - min_rating: numeric rating threshold (e.g., 4.0, 4.5) or None
             
             Note: city and country can be lists to support multiple values.
         """
@@ -296,6 +385,7 @@ class HotelEntityExtractor:
             'traveller_type': None,
             'age_group': None,
             'gender': None,
+            'min_rating': None,
         }
 
         # Match hotel (single value for now)
@@ -311,13 +401,19 @@ class HotelEntityExtractor:
         text_lower = user_input.lower()
         countries = []
         
-        # Check for visa-related patterns: "from [country] to [country]"
+        # Check for visa-related patterns: "from [country] to [country]" or "from [country]" (single country)
         # More flexible patterns that handle various phrasings
         visa_patterns = [
             r'from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
             r'go\s+from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
             r'travel\s+from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
             r'([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s+visa|\s+country|$|,|\?|\.)',  # "egypt to brazil visa"
+        ]
+        
+        # Also check for "from [country]" patterns (single country - source)
+        visa_from_patterns = [
+            r'from\s+([A-Za-z\s]+?)(?:\s+with|\s+my|\s+visa|\s+without|\s+to|\s|$|,|\?|\.)',
+            r'go\s+from\s+([A-Za-z\s]+?)(?:\s+with|\s+my|\s+visa|\s+without|\s+to|\s|$|,|\?|\.)',
         ]
         
         visa_from_to = None  # Store as tuple to preserve order
@@ -331,6 +427,13 @@ class HotelEntityExtractor:
                         # Remove common words that might interfere
                         from_country_raw = re.sub(r'\b(and|or|the|a|an|do|i|need)\b', '', from_country_raw, flags=re.IGNORECASE).strip()
                         to_country_raw = re.sub(r'\b(and|or|the|a|an|visa|requirement)\b', '', to_country_raw, flags=re.IGNORECASE).strip()
+                        # Normalize common aliases
+                        alias_map = {
+                            'usa': 'United States', 'u.s.a': 'United States', 'united states': 'United States', 'america': 'United States',
+                            'uk': 'United Kingdom', 'u.k': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom'
+                        }
+                        from_country_raw = alias_map.get(from_country_raw.lower(), from_country_raw)
+                        to_country_raw = alias_map.get(to_country_raw.lower(), to_country_raw)
                         # Try to match these to known countries
                         from_match = self._fuzzy_match(from_country_raw, self.lookups['countries'], cutoff=0.6)
                         to_match = self._fuzzy_match(to_country_raw, self.lookups['countries'], cutoff=0.6)
@@ -341,10 +444,35 @@ class HotelEntityExtractor:
                 if visa_from_to:
                     break
         
+        # If no "from X to Y" pattern found, check for "from X" pattern (single country)
+        if not visa_from_to:
+            for pattern in visa_from_patterns:
+                matches = re.findall(pattern, text_lower, re.IGNORECASE)
+                if matches:
+                    for match in matches:
+                        if isinstance(match, tuple):
+                            from_country_raw = match[0].strip()
+                        else:
+                            from_country_raw = match.strip()
+                        # Remove common words
+                        from_country_raw = re.sub(r'\b(and|or|the|a|an|do|i|need|with|my|visa|without)\b', '', from_country_raw, flags=re.IGNORECASE).strip()
+                        alias_map = {
+                            'usa': 'United States', 'u.s.a': 'United States', 'united states': 'United States', 'america': 'United States',
+                            'uk': 'United Kingdom', 'u.k': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom'
+                        }
+                        from_country_raw = alias_map.get(from_country_raw.lower(), from_country_raw)
+                        from_match = self._fuzzy_match(from_country_raw, self.lookups['countries'], cutoff=0.6)
+                        if from_match:
+                            # Store as single country in list (will be treated as from_country)
+                            countries = [from_match]
+                            break
+                    if countries:
+                        break
+        
         if visa_from_to:
             # Store as list preserving order: [from_country, to_country]
             countries = [visa_from_to[0], visa_from_to[1]]
-        else:
+        elif not countries:
             # Fall back to general country extraction
             countries = self._fuzzy_match_all(user_input, self.lookups['countries'])
         
@@ -382,6 +510,9 @@ class HotelEntityExtractor:
             entities['gender'] = 'female'
         elif any(w in text_lower for w in ['male', 'men', 'man', 'gentlemen']):
             entities['gender'] = 'male'
+
+        # Extract numeric rating threshold
+        entities['min_rating'] = self._extract_rating(user_input)
 
         return entities
 
@@ -477,6 +608,9 @@ class InputPreprocessor:
         """
         intent_result = self.intent_classifier.classify(user_input)
         entities = self.entity_extractor.extract(user_input)
+        # Propagate detected rating types into entities so retrieval can use them
+        if intent_result.get('rating_types'):
+            entities['rating_types'] = intent_result.get('rating_types')
         embedding = self.embedder.embed(user_input) if self.embedder else None
 
         return {
