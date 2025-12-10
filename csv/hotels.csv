@@ -1,26 +1,156 @@
-hotel_id,hotel_name,city,country,star_rating,lat,lon,cleanliness_base,comfort_base,facilities_base,location_base,staff_base,value_for_money_base
-1,The Azure Tower,New York,United States,5,40.758,-73.9855,9.1,8.8,8.9,9.5,8.6,8.0
-2,The Royal Compass,London,United Kingdom,5,51.5072,-0.1276,9.0,9.2,8.8,9.4,9.0,7.9
-3,L'Étoile Palace,Paris,France,5,48.8566,2.3522,8.8,9.4,8.7,9.6,9.3,8.1
-4,Kyo-to Grand,Tokyo,Japan,5,35.6895,139.6917,9.6,9.0,9.3,8.5,9.5,8.2
-5,The Golden Oasis,Dubai,United Arab Emirates,5,25.2769,55.2962,9.3,9.5,9.6,8.9,9.4,8.5
-6,Marina Bay Zenith,Singapore,Singapore,5,1.29027,103.851959,9.2,9.1,9.4,9.7,9.1,8.3
-7,Sydney Harbour Grand,Sydney,Australia,5,-33.8651,151.2099,8.9,9.0,8.5,9.8,8.9,8.4
-8,Copacabana Lux,Rio de Janeiro,Brazil,5,-22.9068,-43.1729,9.0,8.7,8.6,9.5,8.8,8.6
-9,Berlin Mitte Elite,Berlin,Germany,5,52.52,13.405,9.3,9.2,9.0,9.1,9.1,8.7
-10,The Maple Grove,Toronto,Canada,5,43.6532,-79.3832,9.4,9.3,9.2,8.8,9.2,8.8
-11,The Bund Palace,Shanghai,China,5,31.2304,121.4737,9.1,9.0,9.2,9.6,9.0,8.9
-12,Aztec Heights,Mexico City,Mexico,5,19.4326,-99.1332,8.7,8.9,8.5,9.0,8.7,8.5
-13,The Gateway Royale,Mumbai,India,5,19.076,72.8777,8.9,8.8,8.7,9.2,8.8,8.6
-14,Colosseum Gardens,Rome,Italy,5,41.9028,12.4964,9.2,9.1,8.9,9.8,9.0,8.7
-15,Table Mountain View,Cape Town,South Africa,5,-33.9249,18.4241,9.0,9.2,8.8,9.5,9.2,8.4
-16,Han River Oasis,Seoul,South Korea,5,37.5665,126.978,9.3,9.4,9.1,8.9,9.3,8.5
-17,Kremlin Suites,Moscow,Russia,5,55.7558,37.6173,9.1,9.3,9.0,9.0,9.1,8.6
-18,Nile Grandeur,Cairo,Egypt,5,30.0444,31.2357,8.8,8.7,8.6,9.1,8.7,8.4
-19,Gaudi's Retreat,Barcelona,Spain,5,41.3851,2.1734,9.2,9.1,8.9,9.7,9.0,8.8
-20,The Orchid Palace,Bangkok,Thailand,5,13.7563,100.5018,9.0,9.2,9.1,9.4,9.1,8.6
-21,The Bosphorus Inn,Istanbul,Turkey,5,41.0082,28.9784,9.1,9.0,8.8,9.3,8.9,8.5
-22,Canal House Grand,Amsterdam,Netherlands,5,52.3676,4.9041,9.4,9.1,9.0,9.6,9.2,8.9
-23,Tango Boutique,Buenos Aires,Argentina,5,-34.6037,-58.3816,8.9,8.8,8.7,9.0,8.8,8.7
-24,The Savannah House,Lagos,Nigeria,5,6.5244,3.3792,8.7,8.6,8.5,8.9,8.6,8.4
-25,The Kiwi Grand,Wellington,New Zealand,5,-41.2865,174.7762,9.3,9.2,9.1,9.0,9.1,8.8
+hotel_id,hotel_name,city,country,star_rating,cleanliness_base,comfort_base,facilities_base,location_base,staff_base,value_for_money_base,facilities
+1,The Azure Tower,New York,United States,5,9.1,8.8,8.9,9.5,8.6,8.0,gym|breakfast|pool|concierge|laundry
+2,The Royal Compass,London,United Kingdom,5,9.0,9.2,8.8,9.4,9.0,7.9,pool|breakfast|gym|concierge|laundry
+3,L'Étoile Palace,Paris,France,5,8.8,9.4,8.7,9.6,9.3,8.1,concierge|laundry|pool|gym|breakfast
+4,Kyo-to Grand,Tokyo,Japan,5,9.6,9.0,9.3,8.5,9.5,8.2,breakfast|pool|concierge|laundry|gym
+5,The Golden Oasis,Dubai,United Arab Emirates,5,9.3,9.5,9.6,8.9,9.4,8.5,pool|breakfast|gym
+6,Marina Bay Zenith,Singapore,Singapore,5,9.2,9.1,9.4,9.7,9.1,8.3,gym|breakfast|pool
+7,Sydney Harbour Grand,Sydney,Australia,5,8.9,9.0,8.5,9.8,8.9,8.4,pool|breakfast|concierge|laundry
+8,Copacabana Lux,Rio de Janeiro,Brazil,5,9.0,8.7,8.6,9.5,8.8,8.6,breakfast|pool|concierge|laundry
+9,Berlin Mitte Elite,Berlin,Germany,5,9.3,9.2,9.0,9.1,9.1,8.7,breakfast|pool|gym|concierge|laundry
+10,The Maple Grove,Toronto,Canada,5,9.4,9.3,9.2,8.8,9.2,8.8,pool|concierge|laundry|breakfast|gym
+11,The Bund Palace,Shanghai,China,5,9.1,9.0,9.2,9.6,9.0,8.9,breakfast|gym|pool|concierge|laundry
+12,Aztec Heights,Mexico City,Mexico,5,8.7,8.9,8.5,9.0,8.7,8.5,breakfast|gym|concierge|laundry|pool
+13,The Gateway Royale,Mumbai,India,5,8.9,8.8,8.7,9.2,8.8,8.6,pool|breakfast|gym|concierge|laundry
+14,Colosseum Gardens,Rome,Italy,5,9.2,9.1,8.9,9.8,9.0,8.7,concierge|laundry|breakfast|pool
+15,Table Mountain View,Cape Town,South Africa,5,9.0,9.2,8.8,9.5,9.2,8.4,gym|pool|breakfast|concierge|laundry
+16,Han River Oasis,Seoul,South Korea,5,9.3,9.4,9.1,8.9,9.3,8.5,breakfast|pool|concierge|laundry|gym
+17,Kremlin Suites,Moscow,Russia,5,9.1,9.3,9.0,9.0,9.1,8.6,breakfast|pool|gym|concierge|laundry
+18,Nile Grandeur,Cairo,Egypt,5,8.8,8.7,8.6,9.1,8.7,8.4,breakfast|gym|pool
+19,Gaudi's Retreat,Barcelona,Spain,5,9.2,9.1,8.9,9.7,9.0,8.8,concierge|laundry|breakfast|pool
+20,The Orchid Palace,Bangkok,Thailand,5,9.0,9.2,9.1,9.4,9.1,8.6,concierge|laundry|pool|breakfast|gym
+21,The Bosphorus Inn,Istanbul,Turkey,5,9.1,9.0,8.8,9.3,8.9,8.5,pool|breakfast|gym
+22,Canal House Grand,Amsterdam,Netherlands,5,9.4,9.1,9.0,9.6,9.2,8.9,breakfast|pool
+23,Tango Boutique,Buenos Aires,Argentina,5,8.9,8.8,8.7,9.0,8.8,8.7,concierge|laundry|breakfast|pool|gym
+24,The Savannah House,Lagos,Nigeria,5,8.7,8.6,8.5,8.9,8.6,8.4,concierge|laundry|breakfast|pool|gym
+25,The Kiwi Grand,Wellington,New Zealand,5,9.3,9.2,9.1,9.0,9.1,8.8,pool|breakfast|gym|concierge|laundry
+26,Lakeview Summit,Chicago,United States,4,8.8,8.7,8.6,9.1,8.9,8.3,breakfast|gym|concierge|laundry
+27,Pacific Dunes Resort,San Diego,United States,5,9.1,9.0,9.0,9.4,9.2,8.7,breakfast|pool
+28,Rocky Mountain Lodge,Denver,United States,4,8.7,8.6,8.5,8.8,8.8,8.2,breakfast|pool|concierge|laundry
+29,Harborfront Executive,Boston,United States,5,9.0,9.1,8.9,9.5,9.3,8.6,pool|breakfast|concierge|laundry
+30,Southern Magnolia Retreat,Atlanta,United States,4,8.6,8.5,8.4,8.7,8.7,8.1,breakfast|gym|pool|concierge|laundry
+31,Emerald Sound Hotel,Seattle,United States,5,9.1,9.0,8.9,9.4,9.2,8.5,pool|breakfast|concierge|laundry|gym
+32,Live Oak Grande,Austin,United States,4,8.8,8.7,8.6,9.0,8.9,8.3,pool|breakfast|concierge|laundry
+33,Sunrise Bay Resort,Orlando,United States,5,9.0,8.9,8.8,9.3,9.1,8.4,pool|breakfast|gym
+34,Liberty Plaza Suites,Philadelphia,United States,4,8.7,8.6,8.6,8.9,8.8,8.2,concierge|laundry|gym|pool|breakfast
+35,Coral Breeze Haven,Honolulu,United States,5,9.2,9.1,9.0,9.5,9.3,8.7,breakfast|pool|gym
+36,Canal Quarter Manor,Manchester,United Kingdom,5,9.0,9.1,8.8,9.3,9.2,8.4,concierge|laundry|gym|pool|breakfast
+37,Thistle Crown Hotel,Edinburgh,United Kingdom,5,9.2,9.1,8.9,9.4,9.3,8.6,breakfast|pool|concierge|laundry|gym
+38,Iron Bridge Residences,Birmingham,United Kingdom,4,8.8,8.7,8.6,8.9,8.8,8.2,breakfast|concierge|laundry|pool
+39,Mersey View Towers,Liverpool,United Kingdom,4,8.7,8.6,8.5,8.8,8.9,8.1,pool|breakfast|gym|concierge|laundry
+40,King's College Court,Cambridge,United Kingdom,4,8.9,8.8,8.7,9.0,9.0,8.3,breakfast|pool|gym
+41,Rhone Riverside Retreat,Lyon,France,5,9.1,9.0,8.9,9.3,9.2,8.5,pool|breakfast|concierge|laundry|gym
+42,Calanques Horizon,Marseille,France,4,8.8,8.7,8.6,9.0,8.9,8.2,concierge|laundry|pool|gym|breakfast
+43,Azure Promenade,Nice,France,5,9.2,9.1,9.0,9.5,9.3,8.6,pool|breakfast|gym|concierge|laundry
+44,Bordeaux Grand Quay,Bordeaux,France,4,8.9,8.8,8.7,9.1,9.0,8.3,concierge|laundry|breakfast|pool|gym
+45,Garonne Skyline,Toulouse,France,4,8.7,8.6,8.5,8.9,8.8,8.1,pool|breakfast|gym
+46,Shinkansen Vista,Nagoya,Japan,5,9.2,9.1,9.0,8.9,9.4,8.7,pool|breakfast|gym|concierge|laundry
+47,Hakata Bayfront,Fukuoka,Japan,4,8.8,8.7,8.6,8.8,8.9,8.3,gym|breakfast|pool|concierge|laundry
+48,Bayside Lantern,Yokohama,Japan,5,9.1,9.0,8.9,9.2,9.3,8.5,breakfast|pool|gym|concierge|laundry
+49,Snowfall Suites,Sapporo,Japan,4,8.7,8.6,8.5,8.7,8.8,8.2,breakfast|pool|gym
+50,Peace Park Residence,Hiroshima,Japan,4,8.9,8.8,8.7,8.9,9.0,8.3,gym|breakfast|concierge|laundry|pool
+51,Capital Corniche,Abu Dhabi,United Arab Emirates,5,9.3,9.2,9.1,9.4,9.4,8.7,breakfast|pool|gym|concierge|laundry
+52,Sharjah Pearl,Sharjah,United Arab Emirates,4,8.8,8.7,8.6,8.9,8.9,8.3,concierge|laundry|breakfast|pool
+53,Desert Mirage,Ras Al Khaimah,United Arab Emirates,4,8.7,8.6,8.5,8.8,8.8,8.2,breakfast|pool|gym
+54,Ajman Dunes Resort,Ajman,United Arab Emirates,4,8.6,8.5,8.4,8.7,8.7,8.1,breakfast|pool
+55,Oasis Garden,Al Ain,United Arab Emirates,4,8.8,8.7,8.6,8.9,8.9,8.3,pool|gym|breakfast
+56,Marina Crest,Singapore,Singapore,5,9.2,9.1,9.0,9.6,9.2,8.7,breakfast|pool|gym|concierge|laundry
+57,Orchard Canopy,Singapore,Singapore,5,9.1,9.0,9.1,9.5,9.3,8.6,breakfast|gym|pool|concierge|laundry
+58,Riverfront Quay,Singapore,Singapore,4,8.8,8.7,8.6,9.2,9.0,8.3,pool|concierge|laundry|gym|breakfast
+59,Harbour Bay Suites,Singapore,Singapore,4,8.7,8.6,8.5,9.1,8.9,8.2,gym|breakfast|concierge|laundry|pool
+60,Southern Ridges Retreat,Singapore,Singapore,4,8.9,8.8,8.7,9.0,9.0,8.4,pool|gym|breakfast|concierge|laundry
+61,Yarra Grand,Melbourne,Australia,5,9.1,9.0,8.9,9.4,9.2,8.5,pool|breakfast|gym
+62,Brisbane Riverlight,Brisbane,Australia,4,8.8,8.7,8.6,9.0,8.9,8.3,breakfast|pool|gym|concierge|laundry
+63,Swan River Residences,Perth,Australia,4,8.7,8.6,8.5,8.9,8.8,8.2,pool|breakfast|concierge|laundry|gym
+64,Adelaide Terrace,Adelaide,Australia,4,8.6,8.5,8.4,8.8,8.8,8.1,concierge|laundry|gym|breakfast|pool
+65,Pacific Crest Resort,Gold Coast,Australia,5,9.0,8.9,8.8,9.3,9.1,8.4,breakfast|pool|concierge|laundry|gym
+66,Paulista Heights,Sao Paulo,Brazil,5,9.0,8.9,8.8,9.3,9.1,8.4,breakfast|pool|gym|concierge|laundry
+67,Planalto Vista,Brasilia,Brazil,4,8.7,8.6,8.5,8.9,8.8,8.2,breakfast|concierge|laundry|pool
+68,Bahia Seaside,Salvador,Brazil,4,8.8,8.7,8.6,9.1,8.9,8.3,pool|breakfast|gym
+69,Pine Ridge Curitiba,Curitiba,Brazil,4,8.6,8.5,8.4,8.8,8.8,8.1,gym|concierge|laundry|pool
+70,Atlantic Breeze Fortaleza,Fortaleza,Brazil,4,8.7,8.6,8.5,9.0,8.9,8.2,breakfast|pool|gym|concierge|laundry
+71,Isar Crown,Munich,Germany,5,9.2,9.1,9.0,9.4,9.2,8.6,pool|concierge|laundry|gym|breakfast
+72,Elbe Panorama,Hamburg,Germany,5,9.1,9.0,8.9,9.3,9.1,8.5,concierge|laundry|breakfast|pool
+73,Mainhattan Tower,Frankfurt,Germany,5,9.0,8.9,8.8,9.2,9.0,8.4,pool|gym|breakfast|concierge|laundry
+74,Rhine Promenade,Cologne,Germany,4,8.8,8.7,8.6,9.0,8.9,8.3,breakfast|pool|concierge|laundry|gym
+75,Neckar Residence,Stuttgart,Germany,4,8.7,8.6,8.5,8.9,8.8,8.2,breakfast|pool|concierge|laundry
+76,Seawall Vista,Vancouver,Canada,5,9.2,9.1,9.0,9.5,9.2,8.7,pool|breakfast|gym|concierge|laundry
+77,Mont Royal Luxe,Montreal,Canada,5,9.1,9.0,8.9,9.4,9.2,8.6,pool|gym|breakfast
+78,Bow River Lodge,Calgary,Canada,4,8.8,8.7,8.6,9.0,8.9,8.3,pool|breakfast|gym
+79,ByWard Heritage,Ottawa,Canada,4,8.7,8.6,8.5,8.9,8.9,8.2,pool|breakfast|gym
+80,St. Lawrence Quarters,Quebec City,Canada,4,8.9,8.8,8.7,9.1,9.0,8.4,breakfast|pool|gym|concierge|laundry
+81,Forbidden City Royale,Beijing,China,5,9.2,9.1,9.0,9.3,9.3,8.6,breakfast|pool|concierge|laundry|gym
+82,Pearl Delta Suites,Shenzhen,China,5,9.0,9.0,8.9,9.2,9.1,8.5,pool|breakfast|gym|concierge|laundry
+83,Pearl River Promenade,Guangzhou,China,4,8.8,8.7,8.6,8.9,8.9,8.3,breakfast|concierge|laundry|pool|gym
+84,Jinjiang Riverside,Chengdu,China,4,8.7,8.6,8.5,8.8,8.8,8.2,gym|breakfast|pool|concierge|laundry
+85,West Lake Serenity,Hangzhou,China,5,9.1,9.0,8.9,9.3,9.2,8.6,pool|concierge|laundry|breakfast|gym
+86,Caribbean Coral,Cancun,Mexico,5,9.1,9.0,8.9,9.4,9.2,8.5,breakfast|pool|concierge|laundry|gym
+87,Tapatio Heights,Guadalajara,Mexico,4,8.8,8.7,8.6,8.9,8.9,8.3,pool|breakfast|concierge|laundry|gym
+88,Sierra Vista,Monterrey,Mexico,4,8.7,8.6,8.5,8.8,8.8,8.2,breakfast|gym|concierge|laundry|pool
+89,Angelopolis Gardens,Puebla,Mexico,4,8.6,8.5,8.4,8.8,8.7,8.1,pool|breakfast|concierge|laundry
+90,Baja Blue,Tijuana,Mexico,4,8.7,8.6,8.5,8.9,8.8,8.2,breakfast|pool|gym
+91,Delhi Meridian,New Delhi,India,5,9.1,9.0,8.9,9.3,9.3,8.5,concierge|laundry|breakfast|pool|gym
+92,Silicon Heights,Bangalore,India,5,9.0,9.0,8.9,9.2,9.2,8.4,gym|breakfast|pool
+93,Charminar Court,Hyderabad,India,4,8.8,8.7,8.6,8.9,8.9,8.3,gym|concierge|laundry|pool
+94,Marina Bay Residency,Chennai,India,4,8.7,8.6,8.5,8.8,8.8,8.2,gym|pool|breakfast
+95,Amber Fort Retreat,Jaipur,India,4,8.9,8.8,8.7,9.0,9.0,8.4,pool|breakfast|concierge|laundry|gym
+96,Duomo Royale,Milan,Italy,5,9.2,9.1,9.0,9.4,9.3,8.6,pool|breakfast|concierge|laundry
+97,Arno Riverside,Florence,Italy,5,9.1,9.0,8.9,9.3,9.2,8.5,breakfast|pool|gym|concierge|laundry
+98,Canal Serenade,Venice,Italy,5,9.3,9.2,9.1,9.6,9.4,8.7,gym|pool|breakfast
+99,Vesuvius Vista,Naples,Italy,4,8.8,8.7,8.6,9.0,8.9,8.3,pool|concierge|laundry|gym|breakfast
+100,Po River Court,Turin,Italy,4,8.7,8.6,8.5,8.9,8.8,8.2,breakfast|pool|gym
+101,Highveld Horizon,Johannesburg,South Africa,5,9.0,8.9,8.8,9.1,9.1,8.4,breakfast|pool|concierge|laundry|gym
+102,Union Buildings View,Pretoria,South Africa,4,8.7,8.6,8.5,8.8,8.8,8.2,breakfast|pool|gym
+103,Umhlanga Shores,Durban,South Africa,4,8.8,8.7,8.6,9.0,8.9,8.3,breakfast|pool|concierge|laundry
+104,Algoa Bay Lodge,Port Elizabeth,South Africa,4,8.6,8.5,8.4,8.8,8.8,8.1,gym|breakfast|pool
+105,Free State Manor,Bloemfontein,South Africa,4,8.7,8.6,8.5,8.7,8.7,8.2,gym|breakfast|pool
+106,Haeundae Crest,Busan,South Korea,5,9.1,9.0,8.9,9.2,9.3,8.6,breakfast|concierge|laundry|gym|pool
+107,Incheon Harborlight,Incheon,South Korea,4,8.8,8.7,8.6,8.9,8.9,8.3,breakfast|gym|pool|concierge|laundry
+108,Daegu Pavilion,Daegu,South Korea,4,8.7,8.6,8.5,8.8,8.8,8.2,breakfast|pool|concierge|laundry|gym
+109,Daejeon Science Suites,Daejeon,South Korea,4,8.6,8.5,8.4,8.7,8.7,8.1,breakfast|concierge|laundry|gym|pool
+110,Gwangju Garden,Gwangju,South Korea,4,8.7,8.6,8.5,8.8,8.8,8.2,pool|gym|breakfast|concierge|laundry
+111,Nevsky Grand,Saint Petersburg,Russia,5,9.1,9.0,8.9,9.2,9.2,8.5,gym|concierge|laundry
+112,Kremlin Meadow,Kazan,Russia,4,8.8,8.7,8.6,8.9,8.9,8.3,pool|breakfast|concierge|laundry|gym
+113,Black Sea Resort,Sochi,Russia,5,9.0,8.9,8.8,9.3,9.1,8.4,pool|breakfast|gym
+114,Ob River Heights,Novosibirsk,Russia,4,8.7,8.6,8.5,8.8,8.8,8.2,gym|breakfast|pool
+115,Ural Skyline,Yekaterinburg,Russia,4,8.6,8.5,8.4,8.7,8.7,8.1,pool|gym|breakfast|concierge|laundry
+116,Alexandria Corniche,Alexandria,Egypt,5,9.0,8.9,8.8,9.2,9.1,8.4,concierge|laundry|breakfast|gym|pool
+117,Giza Pyramid View,Giza,Egypt,4,8.8,8.7,8.6,9.0,8.9,8.3,breakfast|pool|gym
+118,Nile Temple Luxor,Luxor,Egypt,4,8.7,8.6,8.5,8.9,8.8,8.2,breakfast|pool|concierge|laundry
+119,Red Sea Breeze,Hurghada,Egypt,4,8.6,8.5,8.4,8.9,8.8,8.1,concierge|laundry|pool|gym|breakfast
+120,Sinai Shoreline,Sharm El Sheikh,Egypt,5,9.1,9.0,8.9,9.4,9.2,8.5,breakfast|gym|concierge|laundry|pool
+121,Gran Via Royale,Madrid,Spain,5,9.2,9.1,9.0,9.4,9.3,8.6,breakfast|pool|concierge|laundry|gym
+122,Turia Gardens,Valencia,Spain,4,8.8,8.7,8.6,9.0,8.9,8.3,breakfast|pool|gym|concierge|laundry
+123,Giralda Terrace,Seville,Spain,5,9.1,9.0,8.9,9.3,9.2,8.5,breakfast|pool|concierge|laundry|gym
+124,Costa del Sol Haven,Malaga,Spain,4,8.7,8.6,8.5,9.0,8.9,8.2,pool|gym|concierge|laundry|breakfast
+125,Bilbao Riverside,Bilbao,Spain,4,8.8,8.7,8.6,8.9,8.9,8.3,breakfast|concierge|laundry|gym
+126,Andaman Crest,Phuket,Thailand,5,9.1,9.0,8.9,9.4,9.2,8.5,gym|breakfast|pool
+127,Lanna Lantern,Chiang Mai,Thailand,4,8.8,8.7,8.6,8.9,8.9,8.3,pool|breakfast|gym|concierge|laundry
+128,Gulf Breeze,Pattaya,Thailand,4,8.7,8.6,8.5,9.0,8.8,8.2,pool|gym|concierge|laundry|breakfast
+129,Limestone Cliffs Resort,Krabi,Thailand,4,8.6,8.5,8.4,9.1,8.8,8.1,gym|breakfast|pool|concierge|laundry
+130,Coconut Grove,Koh Samui,Thailand,5,9.0,8.9,8.8,9.3,9.1,8.4,pool|breakfast|concierge|laundry|gym
+131,Anatolian Heights,Ankara,Turkey,5,9.0,9.0,8.9,9.2,9.1,8.5,pool|gym|concierge|laundry|breakfast
+132,Agean Breeze,Izmir,Turkey,4,8.7,8.6,8.5,8.9,8.9,8.2,concierge|laundry|breakfast|pool
+133,Turquoise Coastline,Antalya,Turkey,5,9.1,9.0,8.9,9.4,9.2,8.6,pool|gym|breakfast|concierge|laundry
+134,Green Bursa Lodge,Bursa,Turkey,4,8.6,8.5,8.4,8.8,8.8,8.1,breakfast|pool|concierge|laundry|gym
+135,Gaziantep Citadel,Gaziantep,Turkey,4,8.7,8.6,8.5,8.8,8.8,8.2,pool|breakfast|concierge|laundry|gym
+136,Rotterdam Quayside,Rotterdam,Netherlands,5,9.1,9.0,8.9,9.4,9.2,8.5,breakfast|pool|concierge|laundry
+137,Dom Tower Court,Utrecht,Netherlands,4,8.8,8.7,8.6,9.0,8.9,8.3,breakfast|pool
+138,Peace Palace Plaza,The Hague,Netherlands,5,9.0,9.0,8.9,9.3,9.1,8.4,breakfast|pool|concierge|laundry
+139,Eindhoven Tech Stay,Eindhoven,Netherlands,4,8.7,8.6,8.5,8.9,8.8,8.2,pool|breakfast|gym|concierge|laundry
+140,Maas River Manor,Maastricht,Netherlands,4,8.8,8.7,8.6,8.9,8.9,8.3,breakfast|pool|gym
+141,Sierras Royale,Cordoba,Argentina,5,9.0,8.9,8.8,9.2,9.1,8.4,breakfast|pool|concierge|laundry|gym
+142,Parana Promenade,Rosario,Argentina,4,8.7,8.6,8.5,8.9,8.8,8.2,gym|pool|breakfast|concierge|laundry
+143,Andes Vista,Mendoza,Argentina,4,8.8,8.7,8.6,9.0,8.9,8.3,pool|gym|concierge|laundry|breakfast
+144,Atlantic Pearl,Mar del Plata,Argentina,4,8.6,8.5,8.4,8.9,8.8,8.1,gym|pool|concierge|laundry|breakfast
+145,Salta Colonial,Salta,Argentina,4,8.7,8.6,8.5,8.8,8.8,8.2,breakfast|pool|gym|concierge|laundry
+146,Aso Rock Residence,Abuja,Nigeria,5,9.0,8.9,8.8,9.1,9.1,8.4,breakfast|pool|gym
+147,Niger Delta Suites,Port Harcourt,Nigeria,4,8.7,8.6,8.5,8.8,8.8,8.2,concierge|laundry|gym|breakfast|pool
+148,Oluyole Gardens,Ibadan,Nigeria,4,8.6,8.5,8.4,8.7,8.7,8.1,breakfast|pool|concierge|laundry|gym
+149,Arewa Grand,Kano,Nigeria,4,8.7,8.6,8.5,8.8,8.8,8.2,pool|breakfast|concierge|laundry|gym
+150,Coal City Terrace,Enugu,Nigeria,4,8.6,8.5,8.4,8.7,8.7,8.1,breakfast|pool|concierge|laundry
+151,Harbour Bridge,Auckland,New Zealand,5,9.1,9.0,8.9,9.3,9.2,8.6,pool|gym|breakfast
+152,Avon Gorge View,Christchurch,New Zealand,4,8.8,8.7,8.6,9.0,8.9,8.3,pool|breakfast|concierge|laundry|gym
+153,Remarkables Retreat,Queenstown,New Zealand,5,9.2,9.1,9.0,9.4,9.3,8.7,gym|breakfast|concierge|laundry|pool
+154,Waikato Riverside,Hamilton,New Zealand,4,8.7,8.6,8.5,8.9,8.8,8.2,pool|gym|breakfast|concierge|laundry
+155,Otago Heritage,Dunedin,New Zealand,4,8.8,8.7,8.6,8.9,8.9,8.3,concierge|laundry|gym|breakfast

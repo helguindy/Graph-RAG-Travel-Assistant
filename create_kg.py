@@ -2,6 +2,64 @@ import pandas as pd
 from neo4j import GraphDatabase
 import sys
 import os
+import re
+from collections import defaultdict
+
+
+# Canonical facility keywords grouped by facility type
+FACILITY_KEYWORDS = {
+    'wifi': ['wifi', 'wi-fi', 'wireless', 'broadband', 'internet', 'lan', 'connection'],
+    'gym': ['gym', 'fitness', 'exercise', 'workout', 'treadmill', 'weight', 'training'],
+    'pool': ['pool', 'swimming', 'swim', 'hot tub', 'jacuzzi', 'spa pool', 'water'],
+    'spa': ['spa', 'sauna', 'massage', 'wellness', 'steam room', 'mud', 'therapy'],
+    'parking': ['parking', 'garage', 'valet', 'lot', 'carport', 'vehicle', 'car'],
+    'breakfast': ['breakfast', 'buffet', 'restaurant', 'dining', 'bar', 'cafe', 'coffee', 'meal'],
+    'laundry': ['laundry', 'dry clean', 'washing', 'ironing', 'linen'],
+    'concierge': ['concierge', 'front desk', 'reception', 'service desk', 'help desk'],
+    'room_service': ['room service', 'in-room', 'in room', 'delivery', 'minibar'],
+    'ac': ['air condition', 'ac', 'climate', 'cooling', 'heating'],
+    'tv': ['tv', 'television', 'cable', 'streaming', 'entertainment'],
+    'safe': ['safe', 'safety', 'security', 'vault'],
+    'balcony': ['balcony', 'terrace', 'patio', 'veranda', 'outdoor'],
+    'elevator': ['elevator', 'lift', 'escalator'],
+    'pet_friendly': ['pet friendly', 'pet', 'dog', 'cat', 'animal'],
+    'business': ['business center', 'conference', 'meeting', 'work space'],
+    'garden': ['garden', 'outdoor', 'landscape', 'green', 'scenic'],
+}
+
+
+def extract_facilities_from_text(text):
+    if not text or pd.isna(text):
+        return set()
+
+    text = str(text).lower()
+    found = set()
+    for facility, keywords in FACILITY_KEYWORDS.items():
+        for keyword in keywords:
+            if re.search(r'\b' + re.escape(keyword) + r'\b', text):
+                found.add(facility)
+                break
+    return found
+
+
+def aggregate_hotel_facilities(reviews_df):
+    by_hotel = defaultdict(lambda: defaultdict(int))
+    for _, row in reviews_df.iterrows():
+        hotel_id = row['hotel_id']
+        for facility in extract_facilities_from_text(row['review_text']):
+            by_hotel[hotel_id][facility] += 1
+
+    aggregated = {}
+    for hotel_id, counts in by_hotel.items():
+        sorted_facilities = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        aggregated[hotel_id] = [name for name, _ in sorted_facilities]
+    return aggregated
+
+
+def attach_facilities_to_hotels(hotels_df, hotel_facilities):
+    hotels_df = hotels_df.copy()
+    hotels_df['facilities'] = hotels_df['hotel_id'].map(lambda x: '|'.join(hotel_facilities.get(x, [])))
+    return hotels_df
 
 
 def read_config(config_file='config.txt'):
@@ -85,6 +143,9 @@ class KnowledgeGraphBuilder:
                         cleanliness_base: $cleanliness_base,
                         comfort_base: $comfort_base,
                         facilities_base: $facilities_base,
+                        location_base: $location_base,
+                        staff_base: $staff_base,
+                        value_for_money_base: $value_for_money_base,
                         average_reviews_score: 0.0
                     })
                     MERGE (c:City {name: $city})
@@ -96,6 +157,9 @@ class KnowledgeGraphBuilder:
                     cleanliness_base=float(hotel['cleanliness_base']),
                     comfort_base=float(hotel['comfort_base']),
                     facilities_base=float(hotel['facilities_base']),
+                    location_base=float(hotel.get('location_base', 0.0)),
+                    staff_base=float(hotel.get('staff_base', 0.0)),
+                    value_for_money_base=float(hotel.get('value_for_money_base', 0.0)),
                     city=hotel['city']
                 )
         print(f"Loaded {len(hotels_df)} hotels")
@@ -174,6 +238,27 @@ class KnowledgeGraphBuilder:
                 )
         print(f"Loaded {len(reviews_df)} reviews")
 
+    def load_facilities(self, hotel_facilities):
+        # Create Facility nodes and HAS_FACILITY relationships
+        facilities = sorted({f for items in hotel_facilities.values() for f in items})
+        with self.driver.session() as session:
+            for facility in facilities:
+                session.run("MERGE (f:Facility {name: $name})", name=facility)
+
+            for hotel_id, facilities_list in hotel_facilities.items():
+                session.run(
+                    "MATCH (h:Hotel {hotel_id: $hotel_id}) SET h.facilities_list = $facilities_list",
+                    hotel_id=int(hotel_id),
+                    facilities_list=facilities_list,
+                )
+                for facility in facilities_list:
+                    session.run(
+                        "MATCH (h:Hotel {hotel_id: $hotel_id}) MATCH (f:Facility {name: $facility}) MERGE (h)-[:HAS_FACILITY]->(f)",
+                        hotel_id=int(hotel_id),
+                        facility=facility,
+                    )
+        print(f"Loaded {len(facilities)} facilities across {len(hotel_facilities)} hotels")
+
     def update_hotel_average_scores(self):
         # Update average_reviews_score for all hotels
         with self.driver.session() as session:
@@ -200,6 +285,17 @@ class KnowledgeGraphBuilder:
                         to_country=visa['to'],
                         visa_type=str(visa.get('visa_type', ''))
                     )
+                elif requires in ('no', 'n', 'false'):
+                    session.run("""
+                        MATCH (from:Country {name: $from_country})
+                        MATCH (to:Country {name: $to_country})
+                        MERGE (from)-[v:VISA_FREE]->(to)
+                        SET v.visa_type = coalesce($visa_type, 'No visa required')
+                    """,
+                        from_country=visa['from'],
+                        to_country=visa['to'],
+                        visa_type=str(visa.get('visa_type', 'No visa required'))
+                    )
         print(f"Loaded visa requirements")
 
 
@@ -207,12 +303,15 @@ def build_knowledge_graph(uri, username, password):
     ## Load CSV files and build knowledge graph
     try:
         hotels_df = pd.read_csv('csv/hotels.csv')
-        reviews_df = pd.read_csv('csv/reviews.csv')
+        reviews_df = pd.read_csv('csv/reviews.csv', engine='python')
         users_df = pd.read_csv('csv/users.csv')
         visa_df = pd.read_csv('csv/visa.csv')
     except Exception as e:
         print(f"Error loading CSV files: {e}")
         sys.exit(1)
+
+    hotel_facilities = aggregate_hotel_facilities(reviews_df)
+    hotels_df = attach_facilities_to_hotels(hotels_df, hotel_facilities)
 
     kg_builder = KnowledgeGraphBuilder(uri, username, password)
     try:
@@ -223,6 +322,7 @@ def build_knowledge_graph(uri, username, password):
         kg_builder.load_hotels(hotels_df)
         kg_builder.load_travellers(users_df)
         kg_builder.load_reviews(reviews_df)
+        kg_builder.load_facilities(hotel_facilities)
         kg_builder.update_hotel_average_scores()
         kg_builder.load_visa_requirements(visa_df)
         print("\nKnowledge Graph created successfully!")
@@ -241,3 +341,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

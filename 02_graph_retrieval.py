@@ -34,6 +34,163 @@ except Exception:
 
 
 # =====================================================================
+# GLOBAL MAPPINGS
+# =====================================================================
+# City-to-Country mapping for visa queries (derived from hotels.csv)
+_city_to_country_map = {
+    'new york': 'United States',
+    'london': 'United Kingdom',
+    'paris': 'France',
+    'tokyo': 'Japan',
+    'dubai': 'United Arab Emirates',
+    'singapore': 'Singapore',
+    'sydney': 'Australia',
+    'rio de janeiro': 'Brazil',
+    'berlin': 'Germany',
+    'toronto': 'Canada',
+    'shanghai': 'China',
+    'mexico city': 'Mexico',
+    'mumbai': 'India',
+    'rome': 'Italy',
+    'cape town': 'South Africa',
+    'seoul': 'South Korea',
+    'moscow': 'Russia',
+    'cairo': 'Egypt',
+    'barcelona': 'Spain',
+    'bangkok': 'Thailand',
+    'istanbul': 'Turkey',
+    'amsterdam': 'Netherlands',
+    'buenos aires': 'Argentina',
+    'lagos': 'Nigeria',
+    'wellington': 'New Zealand',
+    'chicago': 'United States',
+    'san diego': 'United States',
+    'denver': 'United States',
+    'boston': 'United States',
+    'atlanta': 'United States',
+    'seattle': 'United States',
+    'austin': 'United States',
+    'orlando': 'United States',
+    'philadelphia': 'United States',
+    'honolulu': 'United States',
+    'manchester': 'United Kingdom',
+    'edinburgh': 'United Kingdom',
+    'birmingham': 'United Kingdom',
+    'liverpool': 'United Kingdom',
+    'cambridge': 'United Kingdom',
+    'lyon': 'France',
+    'marseille': 'France',
+    'nice': 'France',
+    'bordeaux': 'France',
+    'toulouse': 'France',
+    'nagoya': 'Japan',
+    'fukuoka': 'Japan',
+    'yokohama': 'Japan',
+    'sapporo': 'Japan',
+    'hiroshima': 'Japan',
+    'abu dhabi': 'United Arab Emirates',
+    'sharjah': 'United Arab Emirates',
+    'ras al khaimah': 'United Arab Emirates',
+    'ajman': 'United Arab Emirates',
+    'al ain': 'United Arab Emirates',
+    'melbourne': 'Australia',
+    'brisbane': 'Australia',
+    'perth': 'Australia',
+    'adelaide': 'Australia',
+    'gold coast': 'Australia',
+    'sao paulo': 'Brazil',
+    'brasilia': 'Brazil',
+    'salvador': 'Brazil',
+    'curitiba': 'Brazil',
+    'fortaleza': 'Brazil',
+    'munich': 'Germany',
+    'hamburg': 'Germany',
+    'frankfurt': 'Germany',
+    'cologne': 'Germany',
+    'stuttgart': 'Germany',
+    'vancouver': 'Canada',
+    'montreal': 'Canada',
+    'calgary': 'Canada',
+    'ottawa': 'Canada',
+    'quebec city': 'Canada',
+    'beijing': 'China',
+    'shenzhen': 'China',
+    'guangzhou': 'China',
+    'chengdu': 'China',
+    'hangzhou': 'China',
+    'cancun': 'Mexico',
+    'guadalajara': 'Mexico',
+    'monterrey': 'Mexico',
+    'puebla': 'Mexico',
+    'tijuana': 'Mexico',
+    'new delhi': 'India',
+    'bangalore': 'India',
+    'hyderabad': 'India',
+    'chennai': 'India',
+    'jaipur': 'India',
+    'milan': 'Italy',
+    'florence': 'Italy',
+    'venice': 'Italy',
+    'naples': 'Italy',
+    'turin': 'Italy',
+    'johannesburg': 'South Africa',
+    'pretoria': 'South Africa',
+    'durban': 'South Africa',
+    'port elizabeth': 'South Africa',
+    'bloemfontein': 'South Africa',
+    'busan': 'South Korea',
+    'incheon': 'South Korea',
+    'daegu': 'South Korea',
+    'daejeon': 'South Korea',
+    'gwangju': 'South Korea',
+    'saint petersburg': 'Russia',
+    'kazan': 'Russia',
+    'sochi': 'Russia',
+    'novosibirsk': 'Russia',
+    'yekaterinburg': 'Russia',
+    'alexandria': 'Egypt',
+    'giza': 'Egypt',
+    'luxor': 'Egypt',
+    'hurghada': 'Egypt',
+    'sharm el sheikh': 'Egypt',
+    'madrid': 'Spain',
+    'valencia': 'Spain',
+    'seville': 'Spain',
+    'malaga': 'Spain',
+    'bilbao': 'Spain',
+    'phuket': 'Thailand',
+    'chiang mai': 'Thailand',
+    'pattaya': 'Thailand',
+    'krabi': 'Thailand',
+    'koh samui': 'Thailand',
+    'ankara': 'Turkey',
+    'izmir': 'Turkey',
+    'antalya': 'Turkey',
+    'bursa': 'Turkey',
+    'gaziantep': 'Turkey',
+    'rotterdam': 'Netherlands',
+    'utrecht': 'Netherlands',
+    'the hague': 'Netherlands',
+    'eindhoven': 'Netherlands',
+    'maastricht': 'Netherlands',
+    'cordoba': 'Argentina',
+    'rosario': 'Argentina',
+    'mendoza': 'Argentina',
+    'mar del plata': 'Argentina',
+    'salta': 'Argentina',
+    'abuja': 'Nigeria',
+    'port harcourt': 'Nigeria',
+    'ibadan': 'Nigeria',
+    'kano': 'Nigeria',
+    'enugu': 'Nigeria',
+    'auckland': 'New Zealand',
+    'christchurch': 'New Zealand',
+    'queenstown': 'New Zealand',
+    'hamilton': 'New Zealand',
+    'dunedin': 'New Zealand',
+}
+
+# =====================================================================
 # SECTION A: CYPHER QUERY TEMPLATES (10+ Queries)
 # =====================================================================
 # Deterministic Cypher templates for baseline retrieval
@@ -41,6 +198,22 @@ except Exception:
 
 class CypherTemplates:
     """Library of 10+ Cypher query templates for hotel domain."""
+    
+    # Mapping of intent to query number (matches template order)
+    QUERY_NUMBERS = {
+        'hotel_search': 1,              # Query 1: Basic hotel search by city and rating
+        'hotel_filter': 2,              # Query 2: Filter hotels by city and numeric attributes
+        'hotel_details': 3,             # Query 3: Get hotel details by exact name
+        'hotels_by_country': 4,         # Query 4: Find hotels by country
+        'visa_check': 5,                # Query 5: Visa requirement check
+        'visa_free_destinations': 6,    # Query 6: Find visa-free destinations
+        'hotels_by_country_and_type': 7, # Query 7: Hotels by country and traveller type
+        'cleanest_hotels_by_country': 8, # Query 8: Cleanest hotels in a country
+        'best_location_by_country': 9,  # Query 9: Best located hotels in country
+        'comfortable_hotels_by_country': 10, # Query 10: Most comfortable hotels in country
+        'hotel_facilities': 11,         # Query 11: Get hotel facilities by name
+        'facilities_by_country': 12,    # Query 12: Get facilities in hotels by country
+    }
 
     @staticmethod
     def get_template(intent: str) -> str:
@@ -55,6 +228,7 @@ class CypherTemplates:
         """
         templates = {
             # Query 1: Basic hotel search by city and minimum rating (return quality metrics)
+            # Example question: find me hotels in cairo
             'hotel_search': (
                 "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City {name:$city}) "
                 "MATCH (c)-[:LOCATED_IN]->(co:Country) "
@@ -65,6 +239,7 @@ class CypherTemplates:
             ),
 
             # Query 2: Filter hotels by city and numeric attributes (star rating, cleanliness, etc.)
+            # Example question: Find hotels in Tokyo with cleanliness above 5.0
             'hotel_filter': (
                 "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City {name:$city}) "
                 "MATCH (c)-[:LOCATED_IN]->(co:Country) "
@@ -78,12 +253,15 @@ class CypherTemplates:
             ),
 
             # Query 3: Get hotel details by exact name match
+            # Example question: "Tell me about The Azure Tower hotel"
             'hotel_details': (
-                "MATCH (h:Hotel {name:$hotel_name}) "
-                "RETURN h"
+                "MATCH (h:Hotel {name:$hotel_name})-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country) "
+                "RETURN h.hotel_id, h.name, h.star_rating, h.cleanliness_base, h.comfort_base, h.facilities_base, h.location_base, h.staff_base, h.value_for_money_base, h.average_reviews_score, h.facilities_list, c.name as city, co.name as country "
+                "LIMIT 1"
             ),
 
             # Query 4: Find hotels by country (with quality signals)
+            # Example question: "What are the best hotels in Japan?"
             'hotels_by_country': (
                 "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
                 "RETURN h.hotel_id, h.name, h.star_rating, h.cleanliness_base, h.comfort_base, h.facilities_base, h.location_base, h.staff_base, h.value_for_money_base, h.average_reviews_score, c.name as city, co.name as country "
@@ -91,83 +269,101 @@ class CypherTemplates:
                 "LIMIT 50"
             ),
 
-            # Query 5: Recommendation for specific traveller type
-            'recommend_by_type': (
-                "MATCH (t:Traveller {type:$traveller_type})-[:STAYED_AT]->(h:Hotel) "
-                "WITH h, COUNT(t) as traveller_count "
-                "RETURN h.hotel_id, h.name, h.average_reviews_score, traveller_count "
-                "ORDER BY traveller_count DESC, h.average_reviews_score DESC "
-                "LIMIT 10"
-            ),
-
-            # Query 6: Top-rated hotels in a city
-            'top_hotels_by_city': (
-                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City {name:$city}) "
-                "RETURN h.hotel_id, h.name, h.average_reviews_score "
-                "ORDER BY h.average_reviews_score DESC "
-                "LIMIT 10"
-            ),
-
-            # Query 7: Visa requirement check (between two specific countries)
+            # Query 5: Visa requirement check (between two specific countries)
+            # Example question: "Do I need a visa to travel from India to United Arab Emirates?"
             'visa_check': (
                 "MATCH (from:Country {name:$from_country}), (to:Country {name:$to_country}) "
                 "OPTIONAL MATCH (from)-[v:NEEDS_VISA]->(to) "
-                "RETURN v.visa_type, from.name as from_name, to.name as to_name, "
-                "CASE WHEN v IS NULL THEN 'No visa required' ELSE 'Visa required' END as visa_status"
+                "OPTIONAL MATCH (from)-[f:VISA_FREE]->(to) "
+                "RETURN coalesce(v.visa_type, f.visa_type) as visa_type, from.name as from_name, to.name as to_name, "
+                "CASE "
+                "  WHEN v IS NOT NULL THEN 'Visa required' "
+                "  WHEN f IS NOT NULL THEN 'No visa required' "
+                "  ELSE 'Unknown' "
+                "END as visa_status"
             ),
             
-            # Query 13: Find all visa-free destinations from a country
+            # Query 6: Find all visa-free destinations from a country
+            # Example question: "Which countries can I visit from United Kingdom without a visa?"
             'visa_free_destinations': (
-                "MATCH (from:Country {name:$from_country}) "
-                "MATCH (to:Country) "
-                "WHERE from <> to "
-                "OPTIONAL MATCH (from)-[v:NEEDS_VISA]->(to) "
-                "WHERE v IS NULL "
+                "MATCH (from:Country {name:$from_country})-[:VISA_FREE]->(to:Country) "
                 "RETURN to.name as country_name, 'No visa required' as visa_status "
                 "ORDER BY to.name "
                 "LIMIT 200"
             ),
 
-            # Query 8: Hotels available for a specific date range (if travellers have stayed)
-            'hotels_by_date': (
-                "MATCH (t:Traveller)-[:WROTE]->(r:Review {date:$target_date})-[:REVIEWED]->(h:Hotel) "
-                "RETURN DISTINCT h.hotel_id, h.name, COUNT(r) as reviews_on_date "
-                "LIMIT 20"
+            # Query 7: Find hotels in a country that match traveller preferences
+            # Scoring based on traveller type + facility preferences:
+            # - Couples: comfort (8) + location (8) + staff (7) + concierge/laundry bonus (5)
+            # - Family: facilities (9) + cleanliness (8) + location (7) + pool/breakfast bonus (5)
+            # - Business: location (9) + staff (8) + comfort (7) + concierge bonus (5)
+            # - Solo: gym (8) + laundry (8) + concierge (7) + comfort (6)
+            # Example question: "Which hotels in France are good for couples?"
+            'hotels_by_country_and_type': (
+                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
+                "WITH h, c.name as city, $traveller_type as ttype, "
+                "  CASE $traveller_type "
+                "    WHEN 'couple' THEN (h.comfort_base * 0.35 + h.location_base * 0.35 + h.staff_base * 0.20 + h.facilities_base * 0.10) + "
+                "                       (CASE WHEN 'concierge' IN h.facilities_list OR 'laundry' IN h.facilities_list THEN 0.5 ELSE 0 END) "
+                "    WHEN 'family' THEN (h.facilities_base * 0.40 + h.cleanliness_base * 0.30 + h.location_base * 0.20 + h.comfort_base * 0.10) + "
+                "                       (CASE WHEN 'pool' IN h.facilities_list OR 'breakfast' IN h.facilities_list THEN 0.5 ELSE 0 END) "
+                "    WHEN 'business' THEN (h.location_base * 0.40 + h.staff_base * 0.35 + h.comfort_base * 0.15 + h.cleanliness_base * 0.10) + "
+                "                        (CASE WHEN 'concierge' IN h.facilities_list THEN 0.5 ELSE 0 END) "
+                "    WHEN 'solo' THEN (h.comfort_base * 0.30 + h.location_base * 0.25 + h.value_for_money_base * 0.20 + h.facilities_base * 0.15 + h.cleanliness_base * 0.10) + "
+                "                     (CASE WHEN 'gym' IN h.facilities_list OR 'laundry' IN h.facilities_list THEN 0.4 ELSE 0 END) + "
+                "                     (CASE WHEN 'concierge' IN h.facilities_list THEN 0.3 ELSE 0 END) "
+                "    ELSE h.average_reviews_score "
+                "  END as type_score "
+                "RETURN h.hotel_id, h.name, h.star_rating, h.cleanliness_base, h.comfort_base, h.facilities_base, h.location_base, h.staff_base, h.value_for_money_base, h.average_reviews_score, h.facilities_list, city, type_score "
+                "ORDER BY type_score DESC, h.average_reviews_score DESC "
+                "LIMIT 50"
             ),
 
-            # Query 9: Hotels with high comfort and facilities scores
-            'comfortable_hotels': (
-                "MATCH (h:Hotel) "
-                "WHERE h.comfort_base >= $min_comfort AND h.facilities_base >= $min_facilities "
-                "RETURN h.hotel_id, h.name, h.comfort_base, h.facilities_base "
-                "ORDER BY h.comfort_base DESC, h.facilities_base DESC "
-                "LIMIT 20"
+            # Query 8: Cleanest hotels in a country
+            # Example question: "What are the cleanest hotels in France?"
+            'cleanest_hotels_by_country': (
+                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
+                "RETURN h.hotel_id, h.name, h.cleanliness_base, c.name as city, h.average_reviews_score "
+                "ORDER BY h.cleanliness_base DESC "
+                "LIMIT 15"
             ),
 
-            # Query 10: Best value-for-money hotels in a city
-            'best_value': (
-                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City {name:$city}) "
-                "RETURN h.hotel_id, h.name, h.value_for_money_base, h.star_rating "
-                "ORDER BY h.value_for_money_base DESC "
-                "LIMIT 10"
+            # Query 9: Best located hotels in a country
+            # Example question: "What hotels in Italy have the best location?"
+            'best_location_by_country': (
+                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
+                "RETURN h.hotel_id, h.name, h.location_base, c.name as city, co.name as country, h.average_reviews_score "
+                "ORDER BY h.location_base DESC "
+                "LIMIT 15"
             ),
 
-            # Query 11: Hotels popular with a specific demographic (gender)
-            'hotels_by_demographic': (
-                "MATCH (t:Traveller {gender:$gender})-[:STAYED_AT]->(h:Hotel) "
-                "WITH h, COUNT(t) as popularity "
-                "RETURN h.hotel_id, h.name, h.average_reviews_score, popularity "
-                "ORDER BY popularity DESC, h.average_reviews_score DESC "
-                "LIMIT 10"
+            # Query 10: Most comfortable hotels in a country
+            # Example question: "Which hotels in Egypt are the most comfortable?"
+            'comfortable_hotels_by_country': (
+                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
+                "RETURN h.hotel_id, h.name, h.comfort_base, c.name as city, co.name as country, h.average_reviews_score "
+                "ORDER BY h.comfort_base DESC "
+                "LIMIT 15"
             ),
 
-            # Query 12: Hotels in a country with travellers from specific origin
-            'hotels_for_origin': (
-                "MATCH (t:Traveller)-[:FROM_COUNTRY]->(origin:Country {name:$origin_country}) "
-                "MATCH (t)-[:STAYED_AT]->(h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(dest:Country {name:$dest_country}) "
-                "RETURN DISTINCT h.hotel_id, h.name, COUNT(t) as visitor_count "
-                "ORDER BY visitor_count DESC "
-                "LIMIT 20"
+            # Query 11: Get hotel facilities by hotel name
+            # Example question: "What are the facilities in The Golden Oasis?"
+            'hotel_facilities': (
+                "MATCH (h:Hotel {name:$hotel_name})-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country) "
+                "OPTIONAL MATCH (h)-[:HAS_FACILITY]->(f:Facility) "
+                "RETURN h.hotel_id, h.name, h.facilities_list, COLLECT(f.name) as relationship_facilities, c.name as city, co.name as country "
+                "LIMIT 1"
+            ),
+
+            # Query 12: Get facilities for all hotels in a country
+            # Optionally filters by specific facility keyword (gym, pool, spa, wifi, breakfast, laundry, concierge)
+            # Example question: "What are the facilities in hotels in Egypt?" or "Hotels with gym in Egypt?"
+            'facilities_by_country': (
+                "MATCH (h:Hotel)-[:LOCATED_IN]->(c:City)-[:LOCATED_IN]->(co:Country {name:$country}) "
+                "WHERE $facility IS NULL OR $facility IN h.facilities_list "
+                "RETURN h.hotel_id, h.name, h.facilities_list, c.name as city, co.name as country "
+                "ORDER BY h.name "
+                "LIMIT 50"
             ),
 
 
@@ -210,47 +406,56 @@ class BaselineRetriever:
             print(f"[FAIL] Failed to connect to Neo4j: {e}")
             self.connected = False
 
-    def execute(self, template: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, template: str, params: Dict[str, Any], query_number: Optional[int] = None) -> Dict[str, Any]:
         """
         Execute a Cypher query template with parameters.
 
         Args:
             template: Cypher query template (with $param placeholders)
             params: Dict of parameter values to fill template
+            query_number: Query number for reference
 
         Returns:
             Dict with 'status', 'results', 'error' (if failed)
         """
         if not self.connected or not self.driver:
+            print(f"[DEBUG] BaselineRetriever not connected!")
             return {
                 'status': 'disconnected',
                 'results': [],
                 'error': 'Not connected to Neo4j',
                 'template': template,
                 'params': params,
+                'query_number': query_number,
             }
 
         try:
+            print(f"[DEBUG] Executing query with params: {params}")
+            print(f"[DEBUG] Template: {template[:150]}...")
             records = []
             with self.driver.session() as session:
                 result = session.run(template, **params)
                 for record in result:
                     records.append(dict(record))
 
+            print(f"[DEBUG] Query returned {len(records)} results")
             return {
                 'status': 'success',
                 'results': records,
                 'count': len(records),
                 'template': template,
                 'params': params,
+                'query_number': query_number,
             }
         except Exception as e:
+            print(f"[DEBUG] Query error: {e}")
             return {
                 'status': 'error',
                 'results': [],
                 'error': str(e),
                 'template': template,
                 'params': params,
+                'query_number': query_number,
             }
 
     def close(self):
@@ -768,18 +973,44 @@ class HybridRetriever:
 
         # Build parameters from entities (handles multiple rating filters and countries)
         params = build_cypher_params(entities, intent=intent)
+        print(f"[DEBUG] HybridRetriever.retrieve() - intent: {intent}, entities: {entities}")
+        print(f"[DEBUG] Built params: {params}")
         
         # Choose template: if rating_types present prefer 'hotel_filter' or 'comfortable_hotels'
         chosen_intent = intent
         rating_types = entities.get('rating_types') or []
+        traveller_type = params.get('traveller_type')
         
+        # Special handling for facilities_filter intent with hotel_name
+        if intent == 'facilities_filter' and params.get('hotel_name'):
+            chosen_intent = 'hotel_facilities'
+        # Special handling for facilities_filter intent with country (no specific hotel)
+        elif intent == 'facilities_filter' and params.get('country') and not params.get('hotel_name'):
+            chosen_intent = 'facilities_by_country'
         # Smart template selection based on available entities
-        if intent in ['hotel_search', 'hotel_filter']:
+        # Include quality-specific filter intents and recommendation
+        elif intent in ['hotel_search', 'hotel_filter', 'cleanliness_filter', 'comfort_filter', 'facilities_filter', 'staff_filter', 'value_filter', 'location_filter', 'recommendation']:
             # Check if we have city or country
             has_city = bool(params.get('city'))
             has_country = bool(params.get('country'))
             
-            if rating_types and has_city:
+            # Special: if traveller_type + country, use hotels_by_country_and_type
+            if traveller_type and has_country and not has_city:
+                chosen_intent = 'hotels_by_country_and_type'
+            # Check if this is a quality-specific query for a country
+            elif has_country and not has_city and rating_types:
+                # Determine which quality dimension is primary
+                if 'cleanliness' in rating_types:
+                    chosen_intent = 'cleanest_hotels_by_country'
+                elif 'comfort' in rating_types:
+                    chosen_intent = 'comfortable_hotels_by_country'
+                elif 'value' in rating_types:
+                    chosen_intent = 'best_value_by_country'
+                elif 'location' in rating_types:
+                    chosen_intent = 'best_location_by_country'
+                else:
+                    chosen_intent = 'hotels_by_country'
+            elif rating_types and has_city:
                 # City + rating-specific filters -> hotel_filter
                 chosen_intent = 'hotel_filter'
             elif rating_types and has_country:
@@ -797,12 +1028,26 @@ class HybridRetriever:
 
         # Run baseline if requested
         if method in ['baseline', 'hybrid']:
+            print(f"[DEBUG] Running baseline retrieval with chosen_intent: {chosen_intent}")
+            # Always get template and query number regardless of whether baseline exists
+            template = CypherTemplates.get_template(chosen_intent)
+            query_number = CypherTemplates.QUERY_NUMBERS.get(chosen_intent)
+            results['cypher_template'] = template
+            results['query_number'] = query_number
+            results['chosen_intent'] = chosen_intent
+            print(f"[DEBUG] Set cypher_template in results: query_number={query_number}, chosen_intent={chosen_intent}")
+            
             if self.baseline:
                 # For visa_check intent, check if we need visa_free_destinations query
                 if chosen_intent == 'visa_check':
                     # If only from_country is provided (no to_country), use visa_free_destinations
                     if params.get('from_country') and not params.get('to_country'):
                         chosen_intent = 'visa_free_destinations'
+                        template = CypherTemplates.get_template(chosen_intent)
+                        query_number = CypherTemplates.QUERY_NUMBERS.get(chosen_intent)
+                        results['cypher_template'] = template
+                        results['query_number'] = query_number
+                        results['chosen_intent'] = chosen_intent
                     # If both countries provided, use regular visa_check
                     elif not params.get('from_country'):
                         results['baseline_status'] = 'error'
@@ -813,11 +1058,9 @@ class HybridRetriever:
                         # Both countries provided, use regular visa_check
                         pass
                 
-                template = CypherTemplates.get_template(chosen_intent)
-                
                 # Execute query if we have a valid template and params
                 if not results.get('baseline_error'):
-                    baseline_result = self.baseline.execute(template, params)
+                    baseline_result = self.baseline.execute(template, params, query_number=query_number)
                     results['baseline_results'] = baseline_result.get('results', [])
                     results['baseline_status'] = baseline_result.get('status')
                     if baseline_result.get('error'):
@@ -1051,7 +1294,26 @@ def build_cypher_params(entities: Dict[str, Optional[Any]], intent: Optional[str
 
     # Handle country - special handling for visa_check intent
     country_val = entities.get('country')
-    if country_val:
+    city_val = entities.get('city')
+    
+    # Special handling for visa_check: if city is provided with country, map city to destination country
+    if intent == 'visa_check' and city_val and country_val:
+        # We have both city and country for visa query
+        # Country is source (from_country), city's country is destination (to_country)
+        if isinstance(city_val, list):
+            city_val = city_val[0]
+        if isinstance(country_val, list):
+            country_val = country_val[0]
+        
+        # Map city to its country (lookup in city_country mapping)
+        dest_country = _city_to_country_map.get(city_val.lower()) if city_val else None
+        if dest_country:
+            params['from_country'] = country_val
+            params['to_country'] = dest_country
+        else:
+            # If city-to-country mapping not found, fall back to original logic
+            params['from_country'] = country_val
+    elif country_val:
         if intent == 'visa_check':
             # For visa queries, map multiple countries to from_country and to_country
             if isinstance(country_val, list) and len(country_val) >= 2:
@@ -1078,6 +1340,12 @@ def build_cypher_params(entities: Dict[str, Optional[Any]], intent: Optional[str
         params['hotel_name'] = entities['hotel']
     if entities.get('traveller_type'):
         params['traveller_type'] = entities['traveller_type']
+    if entities.get('facility'):
+        # Add facility parameter (gym, pool, spa, wifi, breakfast, laundry, concierge)
+        params['facility'] = entities['facility']
+    else:
+        # If no facility specified, set to None for optional matching
+        params['facility'] = None
     if entities.get('date'):
         params['target_date'] = entities['date']
 
@@ -1114,10 +1382,8 @@ def build_cypher_params(entities: Dict[str, Optional[Any]], intent: Optional[str
     # For templates that use a generic min_rating (e.g., hotel_search)
     params['min_rating'] = float(min_rating)
 
-    # If star-based query expected
-    if entities.get('min_rating'):
-        # also populate star threshold
-        params['min_star'] = float(entities.get('min_rating'))
+    # Always populate star threshold (hotel_filter query uses it)
+    params['min_star'] = float(min_rating)
 
     return params
 

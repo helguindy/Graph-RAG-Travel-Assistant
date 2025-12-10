@@ -467,40 +467,39 @@ st.divider()
 st.markdown("### 💡 Example Questions")
 st.markdown("Click a question below or write your own:")
 
-# Template questions organized by category
+# Template questions organized by category (matching Cypher query examples)
 template_questions = {
-    "🏨 Hotel Search by City": [
-        "Find hotels in Paris",
-        "Show me hotels in Tokyo",
-        "What hotels are available in London?",
-        "Hotels in Barcelona",
-        "Show hotels in Dubai",
+    "🏨 Hotel Search & Details": [
+        "Tell me about The Azure Tower hotel",
+        "Find hotels in France",
     ],
-    "⭐ Quality-Based Search": [
-        "Find hotels with high cleanliness scores",
-        "Show me hotels with excellent comfort",
-        "What are the best located hotels?",
-        "Find hotels with good staff service",
-        "Hotels with the best value for money",
+    "🏆 Quality & Amenities": [
+        "What's the best facilities hotels in Egypt?",
+        "What are the facilities in The Golden Oasis?",
+        "Where's the cleanest hotel in Egypt",
+        "Find clean hotels in Japan with score above 8",
+        "Best located hotel in New Zealand",
+        "The most comfortable hotel in Turkey",
+        "Hotel with the best staff in India",
+        "Best facilities in Brazil",
     ],
-    "🌍 Hotels by Country": [
-        "Find hotels in Germany",
-        "Hotels in Italy",
-        "Show me hotels in Japan",
-        "Hotels in France",
-        "What hotels are in Australia?",
+    "💰 Value & Pricing": [
+        "What are the best value hotels in Singapore?",
     ],
-    "🏆 Top-Rated Hotels": [
-        "What are the highest rated hotels?",
-        "Show me the best 5-star hotels",
-        "Find luxury hotels",
-        "Best hotels overall",
+    "👥 Traveller Preferences": [
+        "Best hotels for solo travellers in Dubai",
+        "Best hotels for business travellers in Egypt",
+        "Recommend hotels for business travelers in Russia",
     ],
-    "✈️ Travel & Visa": [
-        "Can I travel from India to France without a visa?",
-        "Where can I go from the USA visa-free?",
-        "What are visa-free destinations from UK?",
-        "Visa requirements from Germany to Japan",
+    "🍽️ Specific Amenities": [
+        "Is there hotels with a breakfast buffet in Russia?",
+        "Is there hotels with a laundry services in Thailand?",
+    ],
+    "✈️ Visa & Travel Requirements": [
+        "Do I need a visa to visit France from United States?",
+        "Visa requirements from India to Dubai",
+        "Where can I go without a visa traveling from Japan",
+        "Can I travel from China to Singapore without a visa",
     ],
 }
 
@@ -589,6 +588,9 @@ for category, questions in template_questions.items():
                             "intent": intent,
                             "entities": entities,
                             "retrieval_method": retrieval_method,
+                            "query_number": retrieval_result.get('query_number'),
+                            "chosen_intent": retrieval_result.get('chosen_intent'),
+                            "cypher_template": retrieval_result.get('cypher_template'),
                             "baseline_results": visa_rows,
                             "embedding_results": [],
                             "merged_results": visa_rows,
@@ -770,8 +772,12 @@ with chat_container:
                         col1, col2 = st.columns(2)
                         
                         with col1:
-                            st.markdown("**Query Used:**")
-                            st.code(technical_details.get("query", "N/A"), language="text")
+                            # Query Number and Intent
+                            if technical_details.get("query_number"):
+                                st.markdown(f"**Query #{technical_details['query_number']}** - {technical_details.get('chosen_intent', 'N/A')}")
+                            
+                            st.markdown("**Cypher Query Used:**")
+                            st.code(technical_details.get("cypher_template", "N/A"), language="cypher")
                             
                             st.markdown("**Intent:**")
                             st.info(technical_details.get("intent", "N/A"))
@@ -889,6 +895,9 @@ if user_input:
                 "intent": intent,
                 "entities": entities,
                 "retrieval_method": retrieval_method,
+                "query_number": retrieval_result.get('query_number'),
+                "chosen_intent": retrieval_result.get('chosen_intent'),
+                "cypher_template": retrieval_result.get('cypher_template'),
                 "baseline_results": visa_rows,
                 "embedding_results": [],
                 "merged_results": visa_rows,
@@ -944,6 +953,9 @@ if user_input:
             "intent": intent,
             "entities": entities,
             "retrieval_method": retrieval_method,
+            "query_number": retrieval_result.get('query_number'),
+            "chosen_intent": retrieval_result.get('chosen_intent'),
+            "cypher_template": retrieval_result.get('cypher_template'),
             "baseline_results": retrieval_result.get('baseline_results', []),
             "embedding_results": retrieval_result.get('embedding_results', []),
             "merged_results": retrieval_result.get('merged_results', []),

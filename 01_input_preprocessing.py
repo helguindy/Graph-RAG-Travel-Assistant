@@ -43,7 +43,7 @@ class HotelIntentClassifier:
             'rating_filter': ['rating', 'star', 'stars', 'score', 'quality', 'excellent', 'good', 'highly rated'],
             'cleanliness_filter': ['clean', 'cleanliness', 'tidy', 'hygiene', 'spotless'],
             'comfort_filter': ['comfort', 'comfortable', 'cozy', 'beds', 'bedding', 'spacious'],
-            'facilities_filter': ['facilities', 'amenities', 'wifi', 'pool', 'gym', 'spa', 'parking', 'breakfast'],
+            'facilities_filter': ['facilities', 'amenities', 'wifi', 'pool', 'gym', 'spa', 'parking', 'breakfast', 'laundry', 'concierge'],
             'location_filter': ['location', 'close to', 'near', 'downtown', 'center', 'beach', 'airport'],
             'staff_filter': ['staff', 'service', 'friendly', 'helpful', 'customer service'],
             'value_filter': ['value', 'price', 'budget', 'cheap', 'expensive', 'affordable', 'deal'],
@@ -101,9 +101,22 @@ class HotelIntentClassifier:
                 'user_input': user_input,
             }
 
+        # Hard-prioritize facilities_filter intent to avoid being shadowed by "hotels" keyword
+        facilities_keywords = self.intents.get('facilities_filter', [])
+        if any(kw in text_lower for kw in facilities_keywords):
+            return {
+                'intent': 'facilities_filter',
+                'theme': self.theme,
+                'confidence': 'high',
+                'rating_types': rating_types,
+                'user_input': user_input,
+            }
+
         # Match keywords in priority order
         for intent, keywords in self.intents.items():
             if intent == 'visa_check':
+                continue  # already handled with priority above
+            if intent == 'facilities_filter':
                 continue  # already handled with priority above
             for keyword in keywords:
                 if keyword in text_lower:
@@ -150,6 +163,34 @@ class HotelEntityExtractor:
         """
         self.csv_dir = csv_dir
         self.lookups = self._load_lookups()
+        # City-to-country mapping for visa queries
+        self.city_to_country_map = {
+            'dubai': 'United Arab Emirates',
+            'new york': 'United States',
+            'london': 'United Kingdom',
+            'paris': 'France',
+            'tokyo': 'Japan',
+            'singapore': 'Singapore',
+            'sydney': 'Australia',
+            'rio de janeiro': 'Brazil',
+            'berlin': 'Germany',
+            'toronto': 'Canada',
+            'shanghai': 'China',
+            'mexico city': 'Mexico',
+            'mumbai': 'India',
+            'rome': 'Italy',
+            'cape town': 'South Africa',
+            'seoul': 'South Korea',
+            'moscow': 'Russia',
+            'cairo': 'Egypt',
+            'barcelona': 'Spain',
+            'bangkok': 'Thailand',
+            'istanbul': 'Turkey',
+            'amsterdam': 'Netherlands',
+            'buenos aires': 'Argentina',
+            'lagos': 'Nigeria',
+            'wellington': 'New Zealand',
+        }
 
     def _load_lookups(self) -> Dict[str, Set[str]]:
         """
@@ -375,6 +416,7 @@ class HotelEntityExtractor:
               - age_group: detected age group (e.g., '25-34') or None
               - gender: detected gender mention (male/female/other) or None
               - min_rating: numeric rating threshold (e.g., 4.0, 4.5) or None
+              - facility: detected facility keyword (gym, pool, spa, wifi, breakfast, etc.) or None
             
             Note: city and country can be lists to support multiple values.
         """
@@ -386,6 +428,7 @@ class HotelEntityExtractor:
             'age_group': None,
             'gender': None,
             'min_rating': None,
+            'facility': None,
         }
 
         # Match hotel (single value for now)
@@ -401,80 +444,93 @@ class HotelEntityExtractor:
         text_lower = user_input.lower()
         countries = []
         
-        # Check for visa-related patterns: "from [country] to [country]" or "from [country]" (single country)
-        # More flexible patterns that handle various phrasings
-        visa_patterns = [
-            r'from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
-            r'go\s+from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
-            r'travel\s+from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)',
-            r'([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s+visa|\s+country|$|,|\?|\.)',  # "egypt to brazil visa"
-        ]
-        
-        # Also check for "from [country]" patterns (single country - source)
-        visa_from_patterns = [
-            r'from\s+([A-Za-z\s]+?)(?:\s+with|\s+my|\s+visa|\s+without|\s+to|\s|$|,|\?|\.)',
-            r'go\s+from\s+([A-Za-z\s]+?)(?:\s+with|\s+my|\s+visa|\s+without|\s+to|\s|$|,|\?|\.)',
-        ]
+        # IMPROVED VISA PATTERN MATCHING
+        # Handle various phrasings:
+        # - "Do I need a visa to visit France from United States?"
+        # - "Visa requirements from India to Dubai"  
+        # - "Which countries can I visit from United Kingdom without a visa?"
+        # - "from [country] to [country]"
+        # - "to [country] from [country]"
         
         visa_from_to = None  # Store as tuple to preserve order
-        for pattern in visa_patterns:
-            matches = re.findall(pattern, text_lower, re.IGNORECASE)
-            if matches:
-                for match in matches:
-                    if isinstance(match, tuple) and len(match) >= 2:
-                        from_country_raw = match[0].strip()
-                        to_country_raw = match[1].strip()
-                        # Remove common words that might interfere
-                        from_country_raw = re.sub(r'\b(and|or|the|a|an|do|i|need)\b', '', from_country_raw, flags=re.IGNORECASE).strip()
-                        to_country_raw = re.sub(r'\b(and|or|the|a|an|visa|requirement)\b', '', to_country_raw, flags=re.IGNORECASE).strip()
-                        # Normalize common aliases
-                        alias_map = {
-                            'usa': 'United States', 'u.s.a': 'United States', 'united states': 'United States', 'america': 'United States',
-                            'uk': 'United Kingdom', 'u.k': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom'
-                        }
-                        from_country_raw = alias_map.get(from_country_raw.lower(), from_country_raw)
-                        to_country_raw = alias_map.get(to_country_raw.lower(), to_country_raw)
-                        # Try to match these to known countries
-                        from_match = self._fuzzy_match(from_country_raw, self.lookups['countries'], cutoff=0.6)
-                        to_match = self._fuzzy_match(to_country_raw, self.lookups['countries'], cutoff=0.6)
-                        if from_match and to_match:
-                            # Only set if we have both countries
-                            visa_from_to = (from_match, to_match)
-                            break
-                if visa_from_to:
-                    break
         
-        # If no "from X to Y" pattern found, check for "from X" pattern (single country)
+        # Pattern 1: "from [country] to [country]" or "from [country] to [city]"
+        # This covers: "from India to Dubai", "from Egypt to France"
+        pattern1 = r'from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)'
+        matches = re.findall(pattern1, text_lower, re.IGNORECASE)
+        if matches:
+            from_raw, to_raw = matches[0]
+            from_raw = from_raw.strip()
+            to_raw = to_raw.strip()
+            # Remove stop words
+            from_raw = re.sub(r'\b(with|without|visa|requirement|do|i|need|a|an|the)\b', '', from_raw, flags=re.IGNORECASE).strip()
+            to_raw = re.sub(r'\b(with|without|visa|requirement|do|i|need|a|an|the)\b', '', to_raw, flags=re.IGNORECASE).strip()
+            # Try to match to known countries
+            from_match = self._fuzzy_match(from_raw, self.lookups['countries'], cutoff=0.6)
+            to_match = self._fuzzy_match(to_raw, self.lookups['countries'], cutoff=0.6)
+            # If to_match failed, try fuzzy matching to cities and map to country
+            if not to_match and to_raw:
+                city_match = self._fuzzy_match(to_raw, self.lookups['cities'], cutoff=0.6)
+                if city_match:
+                    # Map city to country using city_to_country_map
+                    to_match = self.city_to_country_map.get(city_match.lower())
+                    if not to_match:
+                        # Fallback: try to find country directly
+                        to_match = self._fuzzy_match(to_raw, self.lookups['countries'], cutoff=0.5)
+            if from_match and to_match:
+                visa_from_to = (from_match, to_match)
+        
+        # Pattern 2: "to [country] from [country]" (reversed order)
+        # This covers: "to visit France from United States"
         if not visa_from_to:
-            for pattern in visa_from_patterns:
-                matches = re.findall(pattern, text_lower, re.IGNORECASE)
-                if matches:
-                    for match in matches:
-                        if isinstance(match, tuple):
-                            from_country_raw = match[0].strip()
-                        else:
-                            from_country_raw = match.strip()
-                        # Remove common words
-                        from_country_raw = re.sub(r'\b(and|or|the|a|an|do|i|need|with|my|visa|without)\b', '', from_country_raw, flags=re.IGNORECASE).strip()
-                        alias_map = {
-                            'usa': 'United States', 'u.s.a': 'United States', 'united states': 'United States', 'america': 'United States',
-                            'uk': 'United Kingdom', 'u.k': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom'
-                        }
-                        from_country_raw = alias_map.get(from_country_raw.lower(), from_country_raw)
-                        from_match = self._fuzzy_match(from_country_raw, self.lookups['countries'], cutoff=0.6)
-                        if from_match:
-                            # Store as single country in list (will be treated as from_country)
-                            countries = [from_match]
-                            break
-                    if countries:
-                        break
+            pattern2 = r'to\s+(?:visit\s+)?([A-Za-z\s]+?)\s+from\s+([A-Za-z\s]+?)(?:\s|$|,|\?|\.|visa)'
+            matches = re.findall(pattern2, text_lower, re.IGNORECASE)
+            if matches:
+                to_raw, from_raw = matches[0]
+                to_raw = to_raw.strip()
+                from_raw = from_raw.strip()
+                # Remove stop words
+                to_raw = re.sub(r'\b(with|without|visa|requirement|do|i|need|a|an|the)\b', '', to_raw, flags=re.IGNORECASE).strip()
+                from_raw = re.sub(r'\b(with|without|visa|requirement|do|i|need|a|an|the)\b', '', from_raw, flags=re.IGNORECASE).strip()
+                # Try to match to known countries
+                from_match = self._fuzzy_match(from_raw, self.lookups['countries'], cutoff=0.6)
+                to_match = self._fuzzy_match(to_raw, self.lookups['countries'], cutoff=0.6)
+                if from_match and to_match:
+                    visa_from_to = (from_match, to_match)
+        
+        # Pattern 3: "from [country]" only (single country - for visa_free_destinations)
+        # This covers: "Which countries can I visit from United Kingdom without a visa?"
+        if not visa_from_to:
+            # Use a less strict pattern to capture the full country name better
+            pattern3 = r'from\s+([A-Z][a-zA-Z\s]*?)(?:\s+(?:without|with|can|could|visit|travel|do|i|need|my|visa)\b|$|,|\?|\.)'
+            matches = re.findall(pattern3, text_lower, re.IGNORECASE)
+            if matches:
+                from_raw = matches[0].strip()
+                # Remove stop words
+                from_raw = re.sub(r'\b(with|without|visa|requirement|do|i|need|a|an|the|my|can|could|visit|travel)\b', '', from_raw, flags=re.IGNORECASE).strip()
+                # Try to match to known countries
+                from_match = self._fuzzy_match(from_raw, self.lookups['countries'], cutoff=0.5)
+                if from_match:
+                    # Store as single country (will be treated as from_country for visa_free_destinations)
+                    countries = [from_match]
+        
+        # Apply alias normalization
+        alias_map = {
+            'usa': 'United States', 'u.s.a': 'United States', 'united states': 'United States', 'america': 'United States',
+            'uk': 'United Kingdom', 'u.k': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom'
+        }
         
         if visa_from_to:
             # Store as list preserving order: [from_country, to_country]
-            countries = [visa_from_to[0], visa_from_to[1]]
+            from_normalized = alias_map.get(visa_from_to[0].lower(), visa_from_to[0])
+            to_normalized = alias_map.get(visa_from_to[1].lower(), visa_from_to[1])
+            countries = [from_normalized, to_normalized]
         elif not countries:
             # Fall back to general country extraction
             countries = self._fuzzy_match_all(user_input, self.lookups['countries'])
+        else:
+            # Normalize countries list
+            countries = [alias_map.get(c.lower(), c) if isinstance(c, str) else c for c in countries]
         
         if countries:
             entities['country'] = countries[0] if len(countries) == 1 else countries
@@ -513,6 +569,13 @@ class HotelEntityExtractor:
 
         # Extract numeric rating threshold
         entities['min_rating'] = self._extract_rating(user_input)
+        
+        # Extract facility keywords (gym, pool, spa, wifi, breakfast, laundry, concierge)
+        facilities = ['gym', 'pool', 'spa', 'wifi', 'breakfast', 'laundry', 'concierge']
+        for facility in facilities:
+            if facility in text_lower:
+                entities['facility'] = facility
+                break  # Take the first facility mentioned
 
         return entities
 

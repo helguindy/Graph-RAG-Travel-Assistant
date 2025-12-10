@@ -1,17 +1,3 @@
-"""
-03_STREAMLIT_APP.PY
-=====================================================================
-Milestone 3: Graph-RAG Travel Assistant - Interactive Demo
-
-A Streamlit UI that demonstrates the complete Graph-RAG pipeline:
-  1. Input Preprocessing: Intent classification, entity extraction, embedding
-  2. Graph Retrieval: Baseline and embedding-based retrieval from Neo4j
-  3. LLM Layer: (Coming soon) Response generation from retrieved context
-
-Allows users to enter queries and see results at each stage.
-=====================================================================
-"""
-
 import streamlit as st
 import json
 import sys

@@ -163,30 +163,52 @@ class ContextMerger:
         
         if intent == 'visa_check' or intent == 'visa_free_destinations':
             # Format visa information
-            lines = ["Visa Requirements Information:"]
             for item in items:
                 # Check if this is a visa-free destinations list (has country_name)
                 if 'country_name' in item:
                     # Visa-free destinations format
                     country_name = item.get('country_name', 'Unknown')
                     visa_status = item.get('visa_status', 'No visa required')
-                    lines.append(f"\n{country_name}: {visa_status}")
+                    lines.append(f"{country_name}: {visa_status}")
                 else:
                     # Regular visa check format (from X to Y)
                     from_name = item.get('from_name') or item.get('from_country', 'Unknown')
                     to_name = item.get('to_name') or item.get('to_country', 'Unknown')
-                    visa_type = item.get('v.visa_type') or item.get('visa_type', 'Not specified')
+                    visa_type = item.get('v.visa_type') or item.get('visa_type', None)
                     visa_status = item.get('visa_status', 'Unknown')
                     
-                    lines.append(f"\nFrom: {from_name}")
-                    lines.append(f"To: {to_name}")
-                    lines.append(f"Visa Status: {visa_status}")
-                    if visa_type and visa_type != 'Not specified':
-                        lines.append(f"Visa Type: {visa_type}")
-                lines.append("---")
+                    # Format as a readable sentence
+                    if visa_status == 'No visa required':
+                        lines.append(f"Visa Status: No visa is required for citizens of {from_name} to visit {to_name}.")
+                    else:
+                        if visa_type and visa_type != 'Not specified':
+                            lines.append(f"Visa Status: A {visa_type} visa is required for citizens of {from_name} to visit {to_name}.")
+                        else:
+                            lines.append(f"Visa Status: A visa is required for citizens of {from_name} to visit {to_name}.")
         else:
             # Format hotel information
             lines = ["Hotel Information from Knowledge Graph:"]
+            
+            # Add scoring explanation for traveller-type queries or facility-filtered queries
+            traveller_type = merged_context.get('traveller_type')
+            facility = merged_context.get('facility')
+            
+            if traveller_type:
+                scoring_explanations = {
+                    'couple': "Hotels ranked by: Comfort (35%) + Location (35%) + Staff (20%) + Facilities (10%), with bonus for Concierge/Laundry",
+                    'family': "Hotels ranked by: Facilities (40%) + Cleanliness (30%) + Location (20%) + Comfort (10%), with bonus for Pool/Breakfast",
+                    'business': "Hotels ranked by: Location (40%) + Staff (35%) + Comfort (15%) + Cleanliness (10%), with bonus for Concierge",
+                    'solo': "Hotels ranked by: Comfort (30%) + Location (25%) + Value (20%) + Facilities (15%) + Cleanliness (10%), with bonus for Gym/Laundry/Concierge"
+                }
+                if traveller_type in scoring_explanations:
+                    lines.append(f"✓ Optimized for {traveller_type.capitalize()} Travellers")
+                    lines.append(f"Ranking Criteria: {scoring_explanations[traveller_type]}")
+                    lines.append("")
+            
+            if facility:
+                lines.append(f"✓ Filtered by Facility: {facility.capitalize()}")
+                lines.append("")
+            
             for i, item in enumerate(items, 1):
                 # Handle Neo4j dot notation keys (e.g., 'h.name', 'h.hotel_id')
                 # Also handle direct keys returned from queries (e.g., 'city', 'country')
@@ -267,6 +289,23 @@ class ContextMerger:
                     lines.append("   Quality Scores:")
                     for ql in quality_lines:
                         lines.append(f"     - {ql}")
+                
+                # Add facilities list if available (from hotel_facilities query)
+                facilities_list = item.get('facilities_list') or item.get('h.facilities_list')
+                relationship_facilities = item.get('relationship_facilities')
+                
+                if facilities_list or relationship_facilities:
+                    lines.append("   Facilities:")
+                    if facilities_list:
+                        # facilities_list is pipe-separated string
+                        fac_items = [f.strip() for f in str(facilities_list).split('|') if f.strip()]
+                        for fac in fac_items:
+                            lines.append(f"     - {fac.capitalize()}")
+                    if relationship_facilities and isinstance(relationship_facilities, list) and relationship_facilities:
+                        # Add relationship-based facilities (from HAS_FACILITY edges)
+                        for fac in relationship_facilities:
+                            if fac and fac not in (facilities_list or ''):
+                                lines.append(f"     - {fac.capitalize()}")
                 
                 # Add embedding score if available
                 if 'score' in item:

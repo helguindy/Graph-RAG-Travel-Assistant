@@ -1,6 +1,11 @@
 neo4j
 pandas
+numpy
+requests
 sentence-transformers
 transformers
+torch
 spacy
 streamlit
+openai
+anthropic
