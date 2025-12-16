@@ -1072,7 +1072,9 @@ class HybridRetriever:
         # Run embedding if requested (skip for visa_check - embedding retriever is hotel-specific)
         if method in ['embeddings', 'hybrid'] and intent != 'visa_check':
             if self.embedding:
+                print(f"[DEBUG] query_embedding is None: {query_embedding is None}")
                 embedding_result = self.embedding.retrieve(query_embedding, top_k=10)
+                print(f"[DEBUG] Embedding retrieval returned {len(embedding_result.get('results', []))} results, status: {embedding_result.get('status')}")
                 results['embedding_results'] = embedding_result.get('results', [])
                 results['embedding_status'] = embedding_result.get('status')
         elif intent == 'visa_check':
@@ -1091,11 +1093,13 @@ class HybridRetriever:
         
         if target_city and results['embedding_results']:
             # Filter embedding results to only include hotels in the specified city
+            print(f"[DEBUG] Filtering {len(results['embedding_results'])} embedding results by city: {target_city}")
             filtered_embedding = []
             for item in results['embedding_results']:
                 item_city = item.get('city', '').lower() if item.get('city') else ''
                 if target_city in item_city or item_city in target_city:
                     filtered_embedding.append(item)
+            print(f"[DEBUG] After city filtering: {len(filtered_embedding)} results remain")
             results['embedding_results'] = filtered_embedding
 
         # Merge results if hybrid (skip merging for visa_check - different result types)

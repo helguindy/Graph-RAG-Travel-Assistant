@@ -23,7 +23,7 @@ from datetime import datetime
 
 
 # =====================================================================
-# FREE HUGGINGFACE MODELS CONFIGURATION
+#  HUGGINGFACE MODELS CONFIGURATION
 # =====================================================================
 # Three accessible models for testing and comparison
 
@@ -604,22 +604,22 @@ class HuggingFaceProvider(BaseLLMProvider):
                                     f"Tried chat completion ({str(e1)[:100]}) and conversational API ({str(e2)[:100]})."
                                 )
                     else:
-                        # For other instruction models, use similar approach
-                        if "llama" in self.model_name.lower() and "3" in self.model_name.lower():
-                            formatted_prompt = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-                        elif "mistral" in self.model_name.lower():
-                            formatted_prompt = f"<s>[INST] {prompt} [/INST]"
-                        else:
-                            formatted_prompt = f"### User:\n{prompt}\n\n### Assistant:\n"
-                        
+                        # For other instruction models (Mistral, Llama), use chat_completion like Gemma
                         try:
-                            response_text = self.api_client.text_generation(
-                                formatted_prompt,
-                                model=self.model_name,
-                                max_new_tokens=max_length,
-                                temperature=0.7,
-                                return_full_text=False
+                            from huggingface_hub import InferenceClient
+                            # Create client with model and token
+                            client = InferenceClient(model=self.model_name, token=self.api_token)
+                            
+                            # Use chat_completion for all instruction models
+                            response = client.chat_completion(
+                                messages=[{"role": "user", "content": prompt}],
+                                max_tokens=max_length,
+                                temperature=0.7
                             )
+                            
+                            # Extract response
+                            response_text = response.choices[0].message["content"]
+                                
                         except Exception as e:
                             raise Exception(f"Failed to generate with {self.model_name}: {str(e)[:200]}")
                     
@@ -935,11 +935,12 @@ class LLMOrchestrator:
         Returns:
             LLMResponse with generated text and metadata
         """
-        # Merge context
+        #  Merge baseline + embedding results
         merged_context = self.context_merger.merge_results(retrieval_result)
+				#Format into readable text
         formatted_context = self.context_merger.format_context(merged_context)
         
-        # Build prompt
+        # Build structured prompt (Persona + Context + Task)
         prompt = self.prompt_builder.build_prompt(user_query, formatted_context)
         
         # Select provider
@@ -955,7 +956,7 @@ class LLMOrchestrator:
                 error="No providers"
             )
         
-        # Generate response
+        # Generate response,    # STEP 4: Send to LLM and get response
         return provider.generate(prompt, **kwargs)
     
     def compare_models(

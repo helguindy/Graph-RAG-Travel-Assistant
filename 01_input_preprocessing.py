@@ -629,11 +629,14 @@ class InputEmbedder:
             >>> len(vec)  # 384 dimensions for default model
             384
         """
+        print(f"[DEBUG InputEmbedder] available={self.available}, model={self.model is not None}")
         if not self.available or not self.model:
+            print(f"[DEBUG InputEmbedder] Returning None because embedder not available")
             return None
 
         try:
             embedding = self.model.encode([text], show_progress_bar=False)
+            print(f"[DEBUG InputEmbedder] Successfully created embedding with shape: {embedding.shape}")
             return embedding[0].tolist()
         except Exception as e:
             print(f"Warning: embedding failed: {e}")

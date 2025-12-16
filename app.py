@@ -33,13 +33,14 @@ LLMOrchestrator = getattr(llm_layer, 'LLMOrchestrator', None)
 HuggingFaceProvider = getattr(llm_layer, 'HuggingFaceProvider', None)
 OpenAIProvider = getattr(llm_layer, 'OpenAIProvider', None)
 AnthropicProvider = getattr(llm_layer, 'AnthropicProvider', None)
+ModelEvaluator = getattr(llm_layer, 'ModelEvaluator', None)
 
 # Page config
 st.set_page_config(
     page_title="Travel Assistant",
     page_icon="✈️",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS for ChatGPT-like styling
@@ -281,6 +282,8 @@ if 'use_features' not in st.session_state:
     st.session_state.use_features = True
 if 'feature_weight' not in st.session_state:
     st.session_state.feature_weight = 0.3
+if 'needs_reinit' not in st.session_state:
+    st.session_state.needs_reinit = False
 
 # Initialize with current settings
 preprocessor, hybrid_retriever, orchestrator = initialize_components(
@@ -302,40 +305,43 @@ with st.sidebar:
     st.divider()
     
     # Embedding model selection
-    st.subheader("🔍 Embedding Settings")
+    st.subheader("🔍 Embedding Model")
     
     embedding_models = {
-        'minilm': 'MiniLM-L6 (384-dim, Fast)',
-        'mpnet': 'MPNet (768-dim, High Quality)',
-        'bge': 'BGE-Small (384-dim, Retrieval-Optimized)'
+        'minilm': {'name': '🚀 MiniLM', 'desc': '384-dim, Fast', 'full': 'MiniLM-L6 (384-dim, Fast)'},
+        'mpnet': {'name': '⭐ MPNet', 'desc': '768-dim, Quality', 'full': 'MPNet (768-dim, High Quality)'},
+        'bge': {'name': '🎯 BGE', 'desc': '384-dim, Optimized', 'full': 'BGE-Small (384-dim, Retrieval-Optimized)'}
     }
     
-    selected_embedding = st.selectbox(
-        "Embedding Model:",
-        options=list(embedding_models.keys()),
-        format_func=lambda x: embedding_models[x],
-        index=list(embedding_models.keys()).index(st.session_state.embedding_model),
-        key="embedding_selector"
-    )
+    # Create button-style selection for embedding models
+    emb_cols = st.columns(3)
+    selected_embedding = st.session_state.embedding_model
     
-    use_features = st.checkbox(
-        "Use Feature Embeddings",
-        value=st.session_state.use_features,
-        help="Combine text embeddings with numerical hotel attributes (star rating, quality scores)"
-    )
+    for idx, (emb_key, emb_info) in enumerate(embedding_models.items()):
+        with emb_cols[idx]:
+            is_selected = (emb_key == st.session_state.embedding_model)
+            button_label = f"{'✓ ' if is_selected else ''}{emb_info['name']}\n{emb_info['desc']}"
+            button_type = "primary" if is_selected else "secondary"
+            
+            if st.button(
+                button_label,
+                key=f"emb_btn_{emb_key}",
+                use_container_width=True,
+                type=button_type
+            ):
+                selected_embedding = emb_key
+                if selected_embedding != st.session_state.embedding_model:
+                    st.session_state.embedding_model = selected_embedding
+                    # Mark for reinitialization
+                    st.session_state.needs_reinit = True
     
-    if use_features:
-        feature_weight = st.slider(
-            "Feature Weight:",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.feature_weight,
-            step=0.1,
-            help="Balance between text (0.0) and feature (1.0) embeddings"
-        )
-    else:
-        feature_weight = 0.0
-
+    # Display currently active embedding model
+    if st.session_state.embedding_model:
+        current_emb = embedding_models[st.session_state.embedding_model]['full']
+        st.info(f"🎯 **Active Embedding Model:** {current_emb}")
+    
+    st.markdown("---")
+    
     # Retrieval method selection
     st.subheader("🧭 Retrieval Method")
     retrieval_options = {
@@ -351,19 +357,18 @@ with st.sidebar:
         key="retrieval_selector"
     )
     
-    # Check if settings changed and need reinitialization
-    settings_changed = (
-        selected_embedding != st.session_state.embedding_model or
-        use_features != st.session_state.use_features or
-        abs(feature_weight - st.session_state.feature_weight) > 0.01
-    )
+    # Handle reinitialization when embedding model button is clicked
+    if hasattr(st.session_state, 'needs_reinit') and st.session_state.needs_reinit:
+        st.session_state.retrieval_method = selected_retrieval
+        st.cache_resource.clear()  # Clear cache to reinitialize
+        st.session_state.needs_reinit = False
+        st.rerun()
+    
+    # Check if retrieval method changed
     retrieval_changed = selected_retrieval != st.session_state.retrieval_method
     
-    if settings_changed or retrieval_changed:
-        if st.button("Apply Embedding Settings", use_container_width=True):
-            st.session_state.embedding_model = selected_embedding
-            st.session_state.use_features = use_features
-            st.session_state.feature_weight = feature_weight
+    if retrieval_changed:
+        if st.button("Apply Retrieval Method", use_container_width=True):
             st.session_state.retrieval_method = selected_retrieval
             st.cache_resource.clear()  # Clear cache to reinitialize
             st.rerun()
@@ -431,16 +436,27 @@ if st.session_state.available_models:
                 description = default_desc
                 is_selected = (idx == selected_idx)
 
+                # Add selection indicator to button text
+                button_label = f"{'✓ ' if is_selected else ''}{short_name}\n{description}"
+                button_type = "primary" if is_selected else "secondary"
+
                 if st.button(
-                    f"{short_name}\n{description}",
+                    button_label,
                     key=f"model_btn_{model_name}",
-                    use_container_width=True
+                    use_container_width=True,
+                    type=button_type
                 ):
                     st.session_state.selected_model = model_name
                     st.rerun()
     
     with col3:
         pass
+    
+    # Display currently active model prominently
+    if st.session_state.selected_model:
+        # Get display name for current model
+        current_display = get_model_display_name(st.session_state.selected_model)
+        st.info(f"🎯 **Currently Using:** {current_display}")
 
     # Model comparison controls
     st.markdown("**🔁 Model Comparison**")
@@ -452,12 +468,13 @@ if st.session_state.available_models:
 
     if compare_enabled:
         default_models = st.session_state.comparison_models or st.session_state.available_models
-        st.session_state.comparison_models = st.multiselect(
+        selected_comparison = st.multiselect(
             "Models to compare:",
             options=st.session_state.available_models,
             default=default_models,
-            key="comparison_models"
+            key="comparison_models_selector"
         )
+        st.session_state.comparison_models = selected_comparison
     else:
         st.session_state.comparison_models = []
 
@@ -523,7 +540,7 @@ for category, questions in template_questions.items():
                     preprocessed = preprocessor.process(user_input)
                     intent = preprocessed.get('intent', 'hotel_search')
                     entities = preprocessed.get('entities', {})
-                    query_embedding = preprocessed.get('query_embedding')
+                    query_embedding = preprocessed.get('embedding')  # Fixed: was 'query_embedding'
                     
                     # Retrieval
                     retrieval_method = st.session_state.retrieval_method
@@ -664,9 +681,16 @@ for category, questions in template_questions.items():
                     }
 
                     if models_to_run:
+                        # Initialize evaluator for comparison
+                        evaluator = ModelEvaluator() if ModelEvaluator else None
+                        model_responses = {}
+                        model_evaluation_results = {}
+                        
                         for model_name in models_to_run:
                             model_used = None
                             response_text_model = response_text
+                            llm_response = None
+                            
                             try:
                                 llm_response = st.session_state.orchestrator.generate_response(
                                     user_query=user_input,
@@ -677,6 +701,7 @@ for category, questions in template_questions.items():
                                 if not llm_response.error:
                                     response_text_model = llm_response.text
                                     model_used = get_model_display_name(model_name)
+                                    model_responses[model_name] = llm_response
                                 else:
                                     response_text_model = f"I encountered an error: {llm_response.error}"
                                     if not has_results:
@@ -699,19 +724,46 @@ for category, questions in template_questions.items():
                                     "content": response_text_model,
                                     "model_used": model_used,
                                     "technical_details": technical_details,
-                                    "show_details": False
+                                    "show_details": False,
+                                    "is_comparison": False
                                 })
                                 continue
 
+                            # Evaluate response if evaluator available
+                            evaluation_metrics = None
+                            if evaluator and llm_response and not llm_response.error:
+                                try:
+                                    evaluation_metrics = evaluator.evaluate_response(
+                                        response=llm_response,
+                                        context=formatted_context,
+                                        user_query=user_input,
+                                        include_qualitative=True
+                                    )
+                                    model_evaluation_results[model_name] = evaluation_metrics
+                                except Exception as eval_error:
+                                    print(f"[Evaluation Error] {eval_error}")
+                                    evaluation_metrics = None
+
                             technical_details = dict(base_details)
                             technical_details["model_name"] = model_name
+                            technical_details["evaluation_metrics"] = evaluation_metrics
 
                             st.session_state.messages.append({
                                 "role": "assistant",
                                 "content": response_text_model,
                                 "model_used": model_used,
                                 "technical_details": technical_details,
-                                "show_details": False
+                                "show_details": False,
+                                "is_comparison": True,
+                                "evaluation_metrics": evaluation_metrics
+                            })
+                        
+                        # Add comparison summary table after all models
+                        if model_evaluation_results and len(model_evaluation_results) > 1:
+                            st.session_state.messages.append({
+                                "role": "comparison_summary",
+                                "comparison_data": model_evaluation_results,
+                                "user_query": user_input
                             })
                     else:
                         if has_results:
@@ -747,24 +799,182 @@ for category, questions in template_questions.items():
 
 st.divider()
 
+# Clear chat button at the top of responses
+if st.session_state.messages:
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col3:
+        if st.button("🗑️ Clear Chat", use_container_width=True, type="secondary"):
+            st.session_state.messages = []
+            st.rerun()
+
 # Display chat history
 chat_container = st.container()
 with chat_container:
     for message in st.session_state.messages:
         role = message["role"]
-        content = message["content"]
+        content = message.get("content", "")
         technical_details = message.get("technical_details", {})
         show_details = message.get("show_details", False)
         
         if role == "user":
             with st.chat_message("user"):
                 st.markdown(content)
+        elif role == "comparison_summary":
+            # Display comprehensive comparison summary
+            st.markdown("---")
+            st.markdown("### 📊 Model Comparison Summary")
+            comparison_data = message.get("comparison_data", {})
+            
+            if comparison_data and len(comparison_data) > 0:
+                import pandas as pd
+                
+                comparison_rows = []
+                for model_name, metrics in comparison_data.items():
+                    qual_scores = metrics.get('qualitative_scores', {})
+                    row = {
+                        'Model': get_model_display_name(model_name),
+                        # Quantitative
+                        'Response Time (s)': f"{metrics.get('response_time', 0):.2f}",
+                        'Tokens': metrics.get('tokens_used', 'N/A'),
+                        'Cost': f"${metrics.get('cost', 0):.4f}" if metrics.get('cost') else 'Free',
+                        # Qualitative (1-5 scale)
+                        'Accuracy': f"{qual_scores.get('accuracy', 0)}/5" if qual_scores else 'N/A',
+                        'Relevance': f"{qual_scores.get('relevance', 0)}/5" if qual_scores else 'N/A',
+                        'Naturalness': f"{qual_scores.get('naturalness', 0)}/5" if qual_scores else 'N/A',
+                        'Correctness': f"{qual_scores.get('correctness', 0)}/5" if qual_scores else 'N/A',
+                        'Overall': f"{metrics.get('overall_quality', 0):.2f}/5" if metrics.get('overall_quality') else 'N/A',
+                    }
+                    comparison_rows.append(row)
+                
+                df = pd.DataFrame(comparison_rows)
+                
+                # Display quantitative section
+                st.markdown("#### 📈 Quantitative Metrics")
+                st.markdown("*Automated measurements of performance, efficiency, and cost*")
+                quant_cols = ['Model', 'Response Time (s)', 'Tokens', 'Cost']
+                st.dataframe(df[quant_cols], use_container_width=True, hide_index=True)
+                
+                # Display qualitative section
+                st.markdown("#### 🎯 Qualitative Metrics (1-5 scale)")
+                st.markdown("*Automated scoring based on evaluation rubrics*")
+                qual_cols = ['Model', 'Accuracy', 'Relevance', 'Naturalness', 'Correctness', 'Overall']
+                st.dataframe(df[qual_cols], use_container_width=True, hide_index=True)
+                
+                # Winner analysis
+                if len(comparison_data) > 1:
+                    st.markdown("#### 🏆 Best Performers")
+                    best_cols = st.columns(3)
+                    
+                    with best_cols[0]:
+                        # Fastest response
+                        fastest = min(comparison_data.items(), key=lambda x: x[1].get('response_time', float('inf')))
+                        st.success(f"**⚡ Fastest:** {get_model_display_name(fastest[0])}\n\n{fastest[1].get('response_time', 0):.2f}s")
+                    
+                    with best_cols[1]:
+                        # Highest quality
+                        best_quality = max(comparison_data.items(), key=lambda x: x[1].get('overall_quality', 0))
+                        st.success(f"**⭐ Highest Quality:** {get_model_display_name(best_quality[0])}\n\n{best_quality[1].get('overall_quality', 0):.2f}/5")
+                    
+                    with best_cols[2]:
+                        # Best value (free models or lowest cost)
+                        free_models = [(k, v) for k, v in comparison_data.items() if v.get('cost', 0) == 0]
+                        if free_models:
+                            # Among free models, pick highest quality
+                            best_free = max(free_models, key=lambda x: x[1].get('overall_quality', 0))
+                            st.success(f"**💰 Best Value:** {get_model_display_name(best_free[0])}\n\nFree + {best_free[1].get('overall_quality', 0):.2f}/5 quality")
+                        else:
+                            lowest_cost = min(comparison_data.items(), key=lambda x: x[1].get('cost', float('inf')))
+                            st.success(f"**💰 Lowest Cost:** {get_model_display_name(lowest_cost[0])}\n\n${lowest_cost[1].get('cost', 0):.4f}")
+        elif role == "comparison":
+            # Display comparison table
+            st.markdown("### 📊 Model Comparison")
+            comparison_data = message.get("comparison_data", {})
+            
+            if comparison_data:
+                # Create comparison dataframe
+                import pandas as pd
+                
+                comparison_rows = []
+                for model_name, metrics in comparison_data.items():
+                    qual_scores = metrics.get('qualitative_scores', {})
+                    row = {
+                        'Model': get_model_display_name(model_name),
+                        # Quantitative
+                        'Response Time (s)': f"{metrics.get('response_time', 0):.2f}",
+                        'Tokens Used': metrics.get('tokens_used', 'N/A'),
+                        'Cost ($)': f"${metrics.get('cost', 0):.4f}" if metrics.get('cost') else 'Free',
+                        'Context Overlap': f"{metrics.get('context_overlap', 0):.2%}",
+                        # Qualitative (1-5 scale)
+                        'Accuracy': f"{qual_scores.get('accuracy', 0)}/5" if qual_scores else 'N/A',
+                        'Relevance': f"{qual_scores.get('relevance', 0)}/5" if qual_scores else 'N/A',
+                        'Naturalness': f"{qual_scores.get('naturalness', 0)}/5" if qual_scores else 'N/A',
+                        'Correctness': f"{qual_scores.get('correctness', 0)}/5" if qual_scores else 'N/A',
+                        'Overall Quality': f"{metrics.get('overall_quality', 0):.2f}/5" if metrics.get('overall_quality') else 'N/A',
+                    }
+                    comparison_rows.append(row)
+                
+                df = pd.DataFrame(comparison_rows)
+                
+                # Display sections
+                st.markdown("#### 📈 Quantitative Metrics")
+                st.markdown("*Automated measurements of performance and efficiency*")
+                quant_cols = ['Model', 'Response Time (s)', 'Tokens Used', 'Cost ($)', 'Context Overlap']
+                st.dataframe(df[quant_cols], use_container_width=True, hide_index=True)
+                
+                st.markdown("#### 🎯 Qualitative Metrics")
+                st.markdown("*Automated scoring using evaluation rubrics (1-5 scale)*")
+                qual_cols = ['Model', 'Accuracy', 'Relevance', 'Naturalness', 'Correctness', 'Overall Quality']
+                st.dataframe(df[qual_cols], use_container_width=True, hide_index=True)
         else:  # assistant
             with st.chat_message("assistant"):
                 model_used = message.get("model_used")
+                is_comparison = message.get("is_comparison", False)
+                evaluation_metrics = message.get("evaluation_metrics")
+                
                 if model_used:
                     st.caption(f"Model: {model_used}")
                 st.markdown(content)
+                
+                # Show evaluation metrics for comparison mode
+                if is_comparison and evaluation_metrics:
+                    st.markdown("---")
+                    
+                    # Quantitative metrics
+                    st.markdown("**📈 Quantitative Metrics**")
+                    quant_cols = st.columns(4)
+                    with quant_cols[0]:
+                        st.metric("Response Time", f"{evaluation_metrics.get('response_time', 0):.2f}s")
+                    with quant_cols[1]:
+                        tokens = evaluation_metrics.get('tokens_used', 'N/A')
+                        st.metric("Tokens Used", tokens if tokens else 'N/A')
+                    with quant_cols[2]:
+                        cost = evaluation_metrics.get('cost', 0)
+                        cost_str = f"${cost:.4f}" if cost else "Free"
+                        st.metric("Cost", cost_str)
+                    with quant_cols[3]:
+                        overlap = evaluation_metrics.get('context_overlap', 0)
+                        st.metric("Context Overlap", f"{overlap:.1%}")
+                    
+                    # Qualitative metrics
+                    qual_scores = evaluation_metrics.get('qualitative_scores', {})
+                    if qual_scores:
+                        st.markdown("**🎯 Qualitative Metrics** (1-5 scale)")
+                        qual_cols = st.columns(5)
+                        with qual_cols[0]:
+                            acc = qual_scores.get('accuracy', 0)
+                            st.metric("Accuracy", f"{acc}/5")
+                        with qual_cols[1]:
+                            rel = qual_scores.get('relevance', 0)
+                            st.metric("Relevance", f"{rel}/5")
+                        with qual_cols[2]:
+                            nat = qual_scores.get('naturalness', 0)
+                            st.metric("Naturalness", f"{nat}/5")
+                        with qual_cols[3]:
+                            cor = qual_scores.get('correctness', 0)
+                            st.metric("Correctness", f"{cor}/5")
+                        with qual_cols[4]:
+                            overall = evaluation_metrics.get('overall_quality', 0)
+                            st.metric("Overall", f"{overall:.2f}/5")
                 
                 # Technical details button
                 if technical_details:
@@ -828,7 +1038,7 @@ if user_input:
         preprocessed = preprocessor.process(user_input)
         intent = preprocessed.get('intent', 'hotel_search')
         entities = preprocessed.get('entities', {})
-        query_embedding = preprocessed.get('query_embedding')
+        query_embedding = preprocessed.get('embedding')  # Fixed: was 'query_embedding'
         
         # Retrieval
         retrieval_method = st.session_state.retrieval_method
@@ -976,6 +1186,10 @@ if user_input:
         }
 
         if models_to_run:
+            # Store responses for comparison
+            model_responses = {}
+            llm_response_objects = {}
+            
             for model_name in models_to_run:
                 model_used = None
                 response_text_model = response_text
@@ -985,6 +1199,9 @@ if user_input:
                         retrieval_result=retrieval_result,
                         model_name=model_name
                     )
+                    
+                    # Store the LLMResponse object for comparison
+                    llm_response_objects[model_name] = llm_response
 
                     if not llm_response.error:
                         response_text_model = llm_response.text
@@ -1017,6 +1234,13 @@ if user_input:
 
                 technical_details = dict(base_details)
                 technical_details["model_name"] = model_name
+                
+                # Store for comparison display
+                model_responses[model_name] = {
+                    "content": response_text_model,
+                    "model_used": model_used,
+                    "technical_details": technical_details
+                }
 
                 st.session_state.messages.append({
                     "role": "assistant",
@@ -1024,6 +1248,26 @@ if user_input:
                     "model_used": model_used,
                     "technical_details": technical_details,
                     "show_details": False
+                })
+            
+            # If comparing multiple models, add comparison table
+            if st.session_state.compare_models and len(llm_response_objects) > 1:
+                from llm_layer import ModelEvaluator
+                evaluator = ModelEvaluator()
+                
+                # Evaluate all responses
+                comparison_metrics = evaluator.compare_responses(
+                    responses=llm_response_objects,
+                    context=formatted_context if formatted_context else "",
+                    user_query=user_input,
+                    include_qualitative=True
+                )
+                
+                # Add comparison table to chat
+                st.session_state.messages.append({
+                    "role": "comparison",
+                    "comparison_data": comparison_metrics,
+                    "model_responses": model_responses
                 })
         else:
             # Fallback response when LLM not available
