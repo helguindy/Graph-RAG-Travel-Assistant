@@ -101,9 +101,25 @@ class HotelIntentClassifier:
                 'user_input': user_input,
             }
 
-        # Hard-prioritize facilities_filter intent to avoid being shadowed by "hotels" keyword
+        # Quality/descriptive words indicate semantic search needed (use embeddings, not exact facility match)
+        quality_words = [
+            'fresh', 'good', 'great', 'excellent', 'amazing', 'best', 'nice', 'wonderful',
+            'delicious', 'clean', 'comfortable', 'friendly', 'helpful', 'spacious', 'modern',
+            'beautiful', 'cozy', 'quiet', 'luxurious', 'premium', 'high-quality', 'top',
+            'superb', 'fantastic', 'outstanding', 'perfect', 'lovely', 'pleasant', 'warm',
+            'attentive', 'professional', 'efficient', 'relaxing', 'romantic', 'charming'
+        ]
+        
+        has_quality_word = any(qw in text_lower for qw in quality_words)
+        
+        # Hard-prioritize facilities_filter ONLY if NO quality words present
+        # Quality words indicate user wants semantic matching (e.g., "fresh fruit breakfast")
+        # Exact facility queries (e.g., "does hotel have breakfast?") will use Cypher
         facilities_keywords = self.intents.get('facilities_filter', [])
-        if any(kw in text_lower for kw in facilities_keywords):
+        has_facility_keyword = any(kw in text_lower for kw in facilities_keywords)
+        
+        if has_facility_keyword and not has_quality_word:
+            # Exact facility query → use Cypher
             return {
                 'intent': 'facilities_filter',
                 'theme': self.theme,
@@ -111,6 +127,8 @@ class HotelIntentClassifier:
                 'rating_types': rating_types,
                 'user_input': user_input,
             }
+        # If has_facility_keyword AND has_quality_word → skip facilities_filter, 
+        # fall through to hotel_search which will use embeddings
 
         # Match keywords in priority order
         for intent, keywords in self.intents.items():

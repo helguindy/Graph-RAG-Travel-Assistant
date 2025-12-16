@@ -314,6 +314,14 @@ class ContextMerger:
                     except (ValueError, TypeError):
                         lines.append(f"   Relevance Score: {item['score']}")
                 
+                # Add review text if available (from embedding results)
+                review_text = item.get('review_text', '')
+                if review_text:
+                    # Truncate long review text to first 200 characters
+                    if len(review_text) > 200:
+                        review_text = review_text[:200] + "..."
+                    lines.append(f"   Customer Reviews: {review_text}")
+                
                 lines.append("---")
         
         return "\n".join(lines)

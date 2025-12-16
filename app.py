@@ -341,7 +341,7 @@ with st.sidebar:
         st.info(f"🎯 **Active Embedding Model:** {current_emb}")
     
     st.markdown("---")
-    
+
     # Retrieval method selection
     st.subheader("🧭 Retrieval Method")
     retrieval_options = {
@@ -661,6 +661,9 @@ for category, questions in template_questions.items():
                         "intent": intent,
                         "entities": entities,
                         "retrieval_method": retrieval_method,
+                        "query_number": retrieval_result.get('query_number'),
+                        "chosen_intent": retrieval_result.get('chosen_intent'),
+                        "cypher_template": retrieval_result.get('cypher_template'),
                         "baseline_results": retrieval_result.get('baseline_results', []),
                         "embedding_results": retrieval_result.get('embedding_results', []),
                         "merged_results": retrieval_result.get('merged_results', []),

@@ -662,8 +662,15 @@ class EmbeddingRetriever:
                 print(f"Warning: failed to build hotel embeddings: {e}")
 
     def _hotel_text(self, row: Dict[str, str]) -> str:
-        """Create a compact text representation for embedding."""
-        parts = [row.get('hotel_name', ''), row.get('city', ''), row.get('country', '')]
+        """Create a compact text representation for embedding.
+        
+        Note: Facilities list is intentionally EXCLUDED from embeddings.
+        This ensures semantic queries like 'good breakfast' or 'excellent gym'
+        match based on REVIEW SENTIMENT, not just facility presence.
+        Use baseline Cypher queries for exact facility matching.
+        """
+        parts = [row.get('hotel_name', ''), row.get('city', ''), row.get('country', ''), row.get('review_text', '')]
+        
         # include star rating and key numeric attributes if present
         for k in ['star_rating', 'cleanliness_base', 'comfort_base', 'facilities_base', 'location_base', 'staff_base', 'value_for_money_base']:
             if k in row and row[k]:
@@ -734,14 +741,46 @@ class EmbeddingRetriever:
     def _build_and_cache_embeddings(self):
         """Build and cache text and feature embeddings using selected model."""
         hotels_path = Path(self.csv_dir) / 'hotels.csv'
+        reviews_path = Path(self.csv_dir) / 'reviews.csv'
+        
         if not hotels_path.exists():
             raise FileNotFoundError(f"{hotels_path} not found")
 
+        # Load hotels
         rows: List[Dict[str, str]] = []
         with open(hotels_path, newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 rows.append(row)
+        
+        # Load and aggregate reviews by hotel_id
+        reviews_by_hotel = {}
+        if reviews_path.exists():
+            print(f"[INFO] Loading review text from {reviews_path}")
+            with open(reviews_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for review_row in reader:
+                    hotel_id = review_row.get('hotel_id')
+                    review_text = review_row.get('review_text', '')
+                    if hotel_id and review_text:
+                        if hotel_id not in reviews_by_hotel:
+                            reviews_by_hotel[hotel_id] = []
+                        reviews_by_hotel[hotel_id].append(review_text)
+            
+            # Merge review text into hotel rows (combine up to 3 reviews per hotel)
+            for row in rows:
+                hotel_id = row.get('hotel_id')
+                if hotel_id in reviews_by_hotel:
+                    # Take first 3 reviews and concatenate
+                    reviews = reviews_by_hotel[hotel_id][:3]
+                    row['review_text'] = ' '.join(reviews)
+                else:
+                    row['review_text'] = ''
+            print(f"[OK] Merged review text for {len(reviews_by_hotel)} hotels")
+        else:
+            print(f"[WARN] {reviews_path} not found, proceeding without review text")
+            for row in rows:
+                row['review_text'] = ''
 
         if np is None:
             raise RuntimeError('numpy is required for embedding retriever')
@@ -809,6 +848,7 @@ class EmbeddingRetriever:
                 'hotel_name': r.get('hotel_name'),
                 'city': r.get('city'),
                 'country': r.get('country'),
+                'review_text': r.get('review_text', ''),  # Include review text for context
             })
         
         meta_path = self.cache_dir / 'hotel_meta.json'
