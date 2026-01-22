@@ -6,6 +6,11 @@ Users can chat naturally and view technical details only when needed.
 =====================================================================
 """
 
+import utils.net
+import utils.clients
+import utils.http_session
+import utils.transport
+import utils.session
 import streamlit as st
 import json
 from typing import Dict, Any, List
